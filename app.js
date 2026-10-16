@@ -57,65 +57,16 @@ function parseCommandStructure(rawInput) {
   };
 }
 
-// 無劇透初始狀態（供 GitHub Pages 新玩家使用，不含任何劇透人名或房間名）
+// 完全乾淨、無任何內建劇透的初始狀態（僅保留 help, inbox, list, save 四個基礎系統指令）
 function getInitialState() {
-  const now = Date.now();
-  const rawDocs = [
-    {
-      id: '00-readme', status: 'solved', source: 'list', children: [],
-      notes: '從 list 發現的編號 00 說明文件。', rawOutput: '', mentionedCodes: []
-    },
-    {
-      id: '01-QU-1-11', status: 'solved', source: 'inbox:msg-1', children: [],
-      notes: '在收件匣「简述」中獲得的第一份文檔線索。', rawOutput: '', mentionedCodes: []
-    },
-    {
-      id: '02-EN-1-6-7-10', status: 'todo', source: 'inbox:msg-1', children: [],
-      notes: '', rawOutput: '', mentionedCodes: []
-    },
-    {
-      id: '03-LI-1-4-5-6-7-8-9', status: 'todo', source: 'inbox:msg-1', children: [],
-      notes: '', rawOutput: '', mentionedCodes: []
-    },
-    {
-      id: '04-ST-?????', status: 'investigating', source: 'inbox:msg-1', children: [],
-      notes: '尾數未知，可利用上方「未知指令組合測試板」嘗試組合。', rawOutput: '', mentionedCodes: []
-    }
-  ];
-
-  const commands = {};
-  rawDocs.forEach((item, idx) => {
-    const parsed = parseCommandStructure(item.id);
-    commands[item.id] = {
-      ...parsed,
-      status: item.status,
-      source: item.source,
-      children: item.children || [],
-      mentionedCodes: item.mentionedCodes || [],
-      notes: item.notes || '',
-      rawOutput: item.rawOutput || '',
-      scratchpad: [],
-      localTokenNotes: {},
-      updatedAt: now - idx * 1000
-    };
-  });
-
   return {
-    commands: commands,
-    inboxMessages: [
-      {
-        id: 'msg-1',
-        title: '简述',
-        content: '01-QU-1-11\n02-EN-1-6-7-10\n03-LI-1-4-5-6-7-8-9\n04-ST-?????',
-        notes: '遊戲開局收到的第一封信件，提供了 01 ~ 04 四份初始文檔線索。',
-        linkedDocs: ['01-QU-1-11', '02-EN-1-6-7-10', '03-LI-1-4-5-6-7-8-9', '04-ST-?????']
-      }
-    ],
+    commands: {},
+    inboxMessages: [],
     systemCommands: [
-      { id: 'help', desc: '顯示基本系統說明與目前已解鎖的系統指令。' },
-      { id: 'inbox', desc: '查閱收件匣消息列表。' },
-      { id: 'list', desc: '列出目前已查閱過的文件清單與剩餘線索數。' },
-      { id: 'save', desc: '呼叫遊戲存檔功能（建議定期將存檔保存至本地）。' }
+      { id: 'help', desc: '顯示系統說明' },
+      { id: 'inbox', desc: '查閱消息列表' },
+      { id: 'list', desc: '查閱文件列表' },
+      { id: 'save', desc: '呼叫存檔功能' }
     ],
     glossary: {},
     glossaryRelations: {},
@@ -126,7 +77,7 @@ function getInitialState() {
     },
     ruleHypothesis: '',
     ui: {
-      selectedId: '01-QU-1-11',
+      selectedId: '',
       mainView: 'workspace',
       matrixMode: 'seq-type',
       netMode: 'cards',
@@ -152,7 +103,6 @@ let filters = {
 let activeTokenEdit = null;
 let scratchSelectedPeople = new Set();
 
-// 載入並無縫遷移舊版資料（把舊版混在清單裡的 help/inbox/list/name/note/save 自動搬到專屬模組）
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -161,27 +111,22 @@ function loadState() {
     const fallback = getInitialState();
 
     const sysMap = {};
-    (parsed.systemCommands || fallback.systemCommands).forEach(s => { sysMap[s.id] = s.desc; });
+    (parsed.systemCommands || fallback.systemCommands).forEach(s => { sysMap[s.id] = s.desc || ''; });
 
-    const inboxList = parsed.inboxMessages || [];
+    const inboxList = (parsed.inboxMessages || []).map(msg => ({
+      id: msg.id || ('msg-' + Date.now()),
+      title: msg.title || '',
+      sender: msg.sender || '',
+      senderCode: msg.senderCode || '',
+      content: msg.content || '',
+      notes: msg.notes || '',
+      linkedDocs: msg.linkedDocs || []
+    }));
+
     const cleanCommands = {};
-
     Object.values(parsed.commands || {}).forEach(cmd => {
       const lowerId = String(cmd.id || '').toLowerCase();
-
-      // 若是舊版混在清單中的系統指令，遷移至系統指令面板與收件匣
       if (KNOWN_SYS_CMDS.includes(lowerId) || cmd.type === 'SYS') {
-        if (lowerId === 'inbox') {
-          if (inboxList.length === 0) {
-            inboxList.push({
-              id: 'msg-1',
-              title: '简述',
-              content: cmd.rawOutput || '01-QU-1-11\n02-EN-1-6-7-10\n03-LI-1-4-5-6-7-8-9\n04-ST-?????',
-              notes: cmd.notes || '',
-              linkedDocs: (cmd.children || []).filter(c => !KNOWN_SYS_CMDS.includes(c.toLowerCase()))
-            });
-          }
-        }
         const combinedNote = [cmd.notes, cmd.rawOutput].filter(Boolean).join(' | ');
         if (combinedNote && (!sysMap[cmd.id] || sysMap[cmd.id].length < combinedNote.length)) {
           sysMap[cmd.id] = combinedNote;
@@ -195,17 +140,16 @@ function loadState() {
       cmd.type = reParsed.type;
       cmd.rawTokens = reParsed.rawTokens;
       cmd.tokens = reParsed.tokens;
-      cmd.mentionedCodes = Array.from(new Set(cmd.mentionedCodes || []));
+      // 結構化手動提及紀錄 [{ speaker: '7', target: '客厅 (Living room)' }]，向下相容舊版字串陣列
+      cmd.manualMentions = (cmd.manualMentions || []).concat(
+        (cmd.mentionedCodes || []).map(mc => (typeof mc === 'string' ? { speaker: '', target: mc } : mc))
+      );
+      delete cmd.mentionedCodes;
       cmd.localTokenNotes = cmd.localTokenNotes || {};
       if (cmd.source === cmd.id) cmd.source = '';
-      if (cmd.source === 'inbox') cmd.source = 'inbox:msg-1';
       cmd.children = Array.from(new Set((cmd.children || []).filter(c => c !== cmd.id && !KNOWN_SYS_CMDS.includes(c.toLowerCase()))));
       cleanCommands[cmd.id] = cmd;
     });
-
-    if (inboxList.length === 0) {
-      inboxList.push(fallback.inboxMessages[0]);
-    }
 
     const finalSysCmds = Object.keys(sysMap).map(k => ({ id: k, desc: sysMap[k] }));
     const selectedId = cleanCommands[parsed.ui && parsed.ui.selectedId]
@@ -267,56 +211,183 @@ function copyText(text, label = '已複製指令') {
   });
 }
 
-// ==================== 提及偵測引擎 (支援 #99 提到 Jack / #77 提到門廳 / #88 提到 #66) ====================
-function getAutoDetectedMentionsForCmd(cmd) {
-  const text = ((cmd.notes || '') + '\n' + (cmd.rawOutput || '')).toLowerCase();
-  const structuralSet = new Set([cmd.type, ...(cmd.tokens || [])]);
-  const detected = new Set(cmd.mentionedCodes || []);
+window.switchMainView = function(viewName) {
+  state.ui.mainView = viewName;
+  saveState();
+  renderAll();
+};
 
-  if (!text.trim()) return Array.from(detected);
+// ==================== 智慧對話提及解析引擎 (解析「#誰 ➔ 提到什麼」) ====================
 
-  // 1. 偵測內文中的 #數字 或 [數字 ...]
-  const numRegex = /(?:#|\[\s*)(\d{1,3})\b/g;
-  let m;
-  while ((m = numRegex.exec(text)) !== null) {
-    const num = m[1];
-    if (!structuralSet.has(num)) detected.add(num);
-  }
+// 比對某個詞彙是否已經對應到字典中的某個代號 (例如 "客厅 (Living room)" -> 對應 "LI"；"索顿 (Thornton)" -> 對應 "11")
+function matchTermToGlossaryCode(termText) {
+  if (!termText) return '';
+  const cleanTerm = termText.replace(/^#/, '').trim();
+  if (state.glossary[cleanTerm] !== undefined) return cleanTerm;
 
-  // 2. 偵測字典中已定義的名稱關鍵字（例如字典 6="伊芙 (Eve)" 或 ST="書房 (Study)"，若筆記出現「伊芙」或「書房」則自動關聯！）
-  Object.entries(state.glossary).forEach(([codeKey, meaning]) => {
-    if (codeKey.startsWith('SEQ_') || structuralSet.has(codeKey)) return;
-    if (!meaning || !meaning.trim()) return;
-    // 拆解括號內外的關鍵詞 (如 "書房 (Study)" -> ["書房", "study"])
-    const keywords = meaning
+  const lowerTerm = cleanTerm.toLowerCase();
+  const termParts = lowerTerm
+    .split(/[\(\)（）\/,，、·\s]+/)
+    .map(s => s.trim())
+    .filter(s => s.length >= 2);
+
+  for (const [codeKey, meaning] of Object.entries(state.glossary)) {
+    if (!meaning || codeKey.startsWith('SEQ_')) continue;
+    const lowerMeaning = meaning.toLowerCase();
+    if (lowerMeaning === lowerTerm) return codeKey;
+    const mParts = lowerMeaning
       .split(/[\(\)（）\/,，、·\s]+/)
-      .map(s => s.trim().toLowerCase())
+      .map(s => s.trim())
       .filter(s => s.length >= 2);
-    for (let i = 0; i < keywords.length; i++) {
-      if (text.includes(keywords[i])) {
-        detected.add(codeKey);
-        break;
-      }
+    for (let i = 0; i < termParts.length; i++) {
+      if (mParts.includes(termParts[i])) return codeKey;
     }
-  });
-
-  return Array.from(detected);
+  }
+  return '';
 }
 
-// 取得某代號在全站的反向關聯 (哪些文檔結構有它、哪些文檔內文提到它、哪些其他代號提到它)
+// 從單句話中提取中英對照專有名詞（如 "其他人都在客厅（Living room）里" -> 提取 "客厅 (Living room)"）
+function extractBilingualTermsFromSentence(sentence) {
+  const results = [];
+  const regex = /[（\(]([A-Za-z][A-Za-z0-9\s\.\-']{1,28})[）\)]/g;
+  let m;
+  while ((m = regex.exec(sentence)) !== null) {
+    const eng = m[1].trim();
+    const prefix = sentence.slice(Math.max(0, m.index - 14), m.index);
+    let cnSeg = prefix.split(/[，。！？；：、“”"'\s,!\?;:\[\]（）\(\)]/).pop() || '';
+    // 去除中文常見前綴介詞與動詞，精準保留名詞本體
+    cnSeg = cnSeg.replace(/^(?:其他人|所有人|我們|我们|他們|他们|她們|她们|你們|你们|這位|这位|那位|那個|那个|這個|这个|你|我|他|她|它)?(?:都在|還在|还在|也在|不在|是在|正是|都是|不是|就是|還是|还是|在|是|的|有|去|到|見|见|找|問|问|和|與|与|跟|向|對|对|給|给|把|被|讓|让|叫|喊|得知|知道|介紹|介绍|關於|关于|看到|聽見|听见|連|连)+/, '').trim();
+    if (cnSeg) {
+      results.push(cnSeg + ' (' + eng + ')');
+    } else {
+      results.push(eng);
+    }
+  }
+  return results;
+}
+
+// 解析單篇文檔的所有「發言者 ➔ 提及對象」紀錄
+// 回傳陣列: [{ speaker: '7', targetText: '客厅 (Living room)', matchedCode: 'LI', isManual: false, manualIdx: -1 }]
+function getStructuredMentionsForCmd(cmd) {
+  if (!cmd) return [];
+  const list = [];
+  const seenKey = new Set();
+
+  function addEntry(speaker, targetText, isManual, manualIdx) {
+    const sp = String(speaker || '').replace(/^#/, '').trim();
+    const tg = String(targetText || '').trim();
+    if (!tg) return;
+    const matchedCode = matchTermToGlossaryCode(tg) || (isDigitsOnly(tg.replace(/^#/, '')) ? tg.replace(/^#/, '') : '');
+    // 若無發言者，且該代號本來就是本篇指令標題結構的一部分，且不是手動加的，則不重複列為內文提及
+    if (!sp && !isManual && matchedCode && (cmd.type === matchedCode || (cmd.tokens || []).includes(matchedCode))) {
+      return;
+    }
+    // 避免發言者自己提自己（例如行首 [1 約翰·霍布斯]）
+    if (sp && matchedCode === sp) return;
+
+    const dedupeKey = sp + '>>' + (matchedCode || tg.toLowerCase());
+    if (seenKey.has(dedupeKey)) return;
+    seenKey.add(dedupeKey);
+
+    list.push({
+      speaker: sp,
+      targetText: tg,
+      matchedCode: matchedCode,
+      isManual: Boolean(isManual),
+      manualIdx: manualIdx
+    });
+  }
+
+  // 1. 先載入使用者手動新增的提及紀錄
+  (cmd.manualMentions || []).forEach((item, idx) => {
+    addEntry(item.speaker, item.target, true, idx);
+  });
+
+  // 2. 逐行分析遊戲原文與筆記中的對話與敘述
+  const lines = ((cmd.rawOutput || '') + '\n' + (cmd.notes || '')).split('\n');
+  let currentSpeaker = '';
+
+  lines.forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) return;
+
+    let contentPart = line;
+
+    // 偵測行首是否有 [7] 或 [1 约翰·霍布斯 (John Hobbes)]
+    const bracketMatch = line.match(/^\[\s*(\d{1,3})(?:\s+[^\[\]]*)?\]\s*(.*)$/);
+    if (bracketMatch) {
+      currentSpeaker = bracketMatch[1];
+      contentPart = bracketMatch[2] || '';
+    } else if (/^\[\s*@/.test(line)) {
+      currentSpeaker = '';
+    }
+
+    // 偵測筆記中類似 "#7提到客厅" 或 "#5詢問#6得知伊芙（Eve）" 的寫法
+    const noteSpeakerMatch = line.match(/^#(\d{1,3})\s*(?:提到|說|说|詢問|询问|介紹|介绍|對|对|向|->|：|:)\s*(.*)$/);
+    if (noteSpeakerMatch) {
+      currentSpeaker = noteSpeakerMatch[1];
+      contentPart = noteSpeakerMatch[2] || '';
+    }
+
+    if (!contentPart) return;
+
+    // (A) 提取該行對話中的所有「中文 (English)」專有名詞（如 客厅（Living room）、索顿（Thornton）、小艾（Eddie）、小维（Vic））
+    const bilingualTerms = extractBilingualTermsFromSentence(contentPart);
+    bilingualTerms.forEach(term => {
+      addEntry(currentSpeaker, term, false, -1);
+    });
+
+    // (B) 提取該行中提到的 #數字 (如 #6)
+    const hashMatches = contentPart.match(/#(\d{1,3})\b/g) || [];
+    hashMatches.forEach(hm => {
+      const num = hm.replace('#', '');
+      if (num !== currentSpeaker) {
+        addEntry(currentSpeaker, '#' + num, false, -1);
+      }
+    });
+
+    // (C) 比對字典中已定義的名稱是否出現在該句中
+    const lowerContent = contentPart.toLowerCase();
+    Object.entries(state.glossary).forEach(([codeKey, meaning]) => {
+      if (!meaning || codeKey.startsWith('SEQ_') || codeKey === currentSpeaker) return;
+      const keywords = meaning
+        .split(/[\(\)（）\/,，、·\s]+/)
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length >= 2);
+      for (let i = 0; i < keywords.length; i++) {
+        if (lowerContent.includes(keywords[i])) {
+          addEntry(currentSpeaker, meaning, false, -1);
+          break;
+        }
+      }
+    });
+  });
+
+  return list;
+}
+
+// 取得某代號在全站的反向關聯（包含：結構出現、該代號說過/提過什麼、被誰提及）
 function getBacklinksForCode(codeKey) {
   const inStructure = [];
-  const inMentions = [];
+  const spokenByThisCode = []; // 這個代號在對話裡提過哪些詞彙/對象
+  const mentionedByOthers = []; // 哪些文檔或哪個發言者提到了這個代號
   const inGlossaryRels = [];
 
   Object.values(state.commands).forEach(cmd => {
     const isStruct = (cmd.type === codeKey) || (cmd.tokens || []).includes(codeKey) || ('SEQ_' + cmd.seq === codeKey);
     if (isStruct) {
       inStructure.push(cmd.id);
-    } else {
-      const mentions = getAutoDetectedMentionsForCmd(cmd);
-      if (mentions.includes(codeKey)) inMentions.push(cmd.id);
     }
+
+    const mentions = getStructuredMentionsForCmd(cmd);
+    mentions.forEach(m => {
+      if (m.speaker === codeKey) {
+        spokenByThisCode.push({ docId: cmd.id, targetText: m.targetText, matchedCode: m.matchedCode });
+      }
+      if (m.matchedCode === codeKey) {
+        mentionedByOthers.push({ docId: cmd.id, speaker: m.speaker, targetText: m.targetText });
+      }
+    });
   });
 
   const targetName = (state.glossary[codeKey] || '').toLowerCase();
@@ -336,9 +407,15 @@ function getBacklinksForCode(codeKey) {
     }
   });
 
-  return { inStructure: inStructure, inMentions: inMentions, inGlossaryRels: inGlossaryRels };
+  return {
+    inStructure: inStructure,
+    spokenByThisCode: spokenByThisCode,
+    mentionedByOthers: mentionedByOthers,
+    inGlossaryRels: inGlossaryRels
+  };
 }
 
+// 提取行首明確標示的 [編號 姓名]（如 [1 约翰·霍布斯 (John Hobbes)]）
 function extractBracketedCodesFromText(text) {
   const regex = /\[\s*(\d{1,3})\s+([^\[\]\n]{1,40}?)\s*\]/g;
   let match;
@@ -400,18 +477,17 @@ function applyUiSettings() {
     btn.classList.toggle('active', btn.dataset.netMode === (state.ui.netMode || 'cards'));
   });
 
-  // 套用玩家自訂的無劇透結構名稱
   const segA = (state.segmentLabels && state.segmentLabels.segA) || '序號';
   const segB = (state.segmentLabels && state.segmentLabels.segB) || '分類代號';
   const segC = (state.segmentLabels && state.segmentLabels.segC) || '尾數代號';
 
   document.getElementById('filterSegBTitle').textContent = '📍 ' + segB;
-  document.getElementById('filterSegCTitle').textContent = '🏷️ ' + segC + '（含內文提及）';
+  document.getElementById('filterSegCTitle').textContent = '🏷️ ' + segC + '（含對話提及）';
   document.getElementById('matrixModeBtn1').textContent = '① ' + segA + ' × ' + segB;
   document.getElementById('matrixModeBtn2').textContent = '② 文檔 × ' + segC + '（含提及）';
-  document.getElementById('gTabBtnTokens').textContent = '③ ' + segC + ' (#1, #5...)';
-  document.getElementById('gTabBtnTypes').textContent = '② ' + segB + ' (QU, EN, ST...)';
-  document.getElementById('gTabBtnSeqs').textContent = '① ' + segA + ' (00, 01...)';
+  document.getElementById('gTabBtnTokens').textContent = '③ ' + segC;
+  document.getElementById('gTabBtnTypes').textContent = '② ' + segB;
+  document.getElementById('gTabBtnSeqs').textContent = '① ' + segA;
 
   const leftPane = document.getElementById('leftPane');
   const resizer = document.getElementById('paneResizer');
@@ -455,7 +531,8 @@ window.setStatusFilter = function(status) {
 function getSourceOptionsHtml(excludeCmdId) {
   const inboxOpts = (state.inboxMessages || []).map(msg => {
     const val = 'inbox:' + msg.id;
-    return '<option value="' + escapeHtml(val) + '">📬 收件匣：' + escapeHtml(msg.title) + '</option>';
+    const senderInfo = msg.sender ? (' [' + msg.sender + ']') : '';
+    return '<option value="' + escapeHtml(val) + '">📬 收件匣：' + escapeHtml((msg.title || '未命名') + senderInfo) + '</option>';
   }).join('');
 
   const sysOpts = '<option value="list">⌨️ 系統指令：list</option>';
@@ -471,7 +548,8 @@ function formatSourceLabel(src) {
   if (src.startsWith('inbox:')) {
     const msgId = src.split(':')[1];
     const msg = (state.inboxMessages || []).find(m => m.id === msgId);
-    return '📬 ' + (msg ? msg.title : 'inbox');
+    if (!msg) return '📬 inbox';
+    return '📬 ' + msg.title + (msg.sender ? (' (' + msg.sender + ')') : '');
   }
   return src;
 }
@@ -493,7 +571,9 @@ function renderFilterDrawer() {
     if (c.type && c.type !== 'SYS' && c.type !== 'INFO') {
       typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
     }
-    const allCmdCodes = new Set([...(c.tokens || []), ...getAutoDetectedMentionsForCmd(c)]);
+    const mentions = getStructuredMentionsForCmd(c);
+    const mentionedNums = mentions.map(m => m.matchedCode).filter(Boolean);
+    const allCmdCodes = new Set([...(c.tokens || []), ...mentionedNums]);
     allCmdCodes.forEach(t => {
       if (!t.includes('?') && isDigitsOnly(t)) {
         tokenCounts[t] = (tokenCounts[t] || 0) + 1;
@@ -534,7 +614,7 @@ function renderFilterDrawer() {
       ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
       : 'bg-slate-900 text-slate-300 border-slate-800';
     return '<button class="px-2 py-0.5 rounded border font-mono text-xs ' + cls + '" onclick="toggleSetFilter(\'types\',\'' + escapeHtml(t) + '\')">' + escapeHtml(t) + escapeHtml(locName) + ' <span class="opacity-60">(' + typeCounts[t] + ')</span></button>';
-  }).join('');
+  }).join('') || '<span class="text-slate-600 text-[11px]">尚無分類資料</span>';
 
   const sortedTokens = Object.keys(tokenCounts).sort((a, b) => Number(a) - Number(b));
   document.getElementById('tokenFilterBar').innerHTML = sortedTokens.map(tk => {
@@ -544,7 +624,7 @@ function renderFilterDrawer() {
       ? 'bg-sky-500 text-slate-950 font-bold border-sky-400'
       : 'bg-slate-900 text-slate-300 border-slate-800';
     return '<button class="px-2 py-0.5 rounded border font-mono text-xs ' + cls + '" onclick="toggleSetFilter(\'tokens\',\'' + escapeHtml(tk) + '\')">#' + escapeHtml(tk) + escapeHtml(pName) + ' <span class="opacity-60">(' + tokenCounts[tk] + ')</span></button>';
-  }).join('');
+  }).join('') || '<span class="text-slate-600 text-[11px]">尚無尾數資料</span>';
 
   let activeCount = 0;
   const pills = [];
@@ -574,9 +654,10 @@ function getFilteredCommands() {
     if (filters.category !== 'all' && cmd.category !== filters.category) return false;
     if (filters.status !== 'all' && cmd.status !== filters.status) return false;
     if (filters.types.size > 0 && !filters.types.has(cmd.type)) return false;
+    const mentions = getStructuredMentionsForCmd(cmd);
     if (filters.tokens.size > 0) {
       const arr = Array.from(filters.tokens);
-      const cmdAllCodes = new Set([...(cmd.tokens || []), ...getAutoDetectedMentionsForCmd(cmd)]);
+      const cmdAllCodes = new Set([...(cmd.tokens || []), ...mentions.map(m => m.matchedCode).filter(Boolean)]);
       const hasMatch = filters.tokenLogic === 'AND'
         ? arr.every(t => cmdAllCodes.has(t))
         : arr.some(t => cmdAllCodes.has(t));
@@ -584,9 +665,9 @@ function getFilteredCommands() {
     }
     if (q) {
       const locText = state.glossary[cmd.type] || '';
-      const mentions = getAutoDetectedMentionsForCmd(cmd);
-      const peopleText = [...(cmd.tokens || []), ...mentions].map(t => state.glossary[t] || '').join(' ');
-      const hay = [cmd.id, cmd.notes, cmd.rawOutput, cmd.source, locText, peopleText].join(' ').toLowerCase();
+      const mentionTexts = mentions.map(m => (m.speaker ? ('#' + m.speaker + ' ') : '') + m.targetText + ' ' + (state.glossary[m.matchedCode] || '')).join(' ');
+      const peopleText = (cmd.tokens || []).map(t => state.glossary[t] || '').join(' ');
+      const hay = [cmd.id, cmd.notes, cmd.rawOutput, formatSourceLabel(cmd.source), locText, peopleText, mentionTexts].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -607,7 +688,10 @@ function renderCommandList() {
   const list = getFilteredCommands();
   const box = document.getElementById('cmdListContainer');
   if (list.length === 0) {
-    box.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">沒有符合條件的文檔</div>';
+    const totalCount = Object.keys(state.commands).length;
+    box.innerHTML = '<div class="text-center py-8 text-xs text-slate-500">' +
+      (totalCount === 0 ? '清單目前為空，請從上方新增文檔指令' : '沒有符合篩選條件的文檔') +
+      '</div>';
     return;
   }
 
@@ -647,10 +731,11 @@ function renderCommandList() {
       return '<span class="badge-scalable px-1.5 py-0.5 rounded bg-sky-950/60 border border-sky-500/30 text-sky-300 font-mono">#' + escapeHtml(tk) + hintSpan + '</span>';
     }).join('');
 
-    const mentions = getAutoDetectedMentionsForCmd(cmd);
-    const mentionsHtml = mentions.map(mc => {
-      const mName = state.glossary[mc] ? state.glossary[mc].split('(')[0].trim() : '';
-      return '<span class="badge-scalable px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-300 font-mono" title="內文提及">💬#' + escapeHtml(mc) + (mName ? ('(' + escapeHtml(mName) + ')') : '') + '</span>';
+    const mentions = getStructuredMentionsForCmd(cmd);
+    const mentionsHtml = mentions.slice(0, 6).map(m => {
+      const spPrefix = m.speaker ? ('#' + m.speaker + '➔') : '💬';
+      const shortTarget = m.targetText.split('(')[0].trim();
+      return '<span class="badge-scalable px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-purple-200 font-mono" title="' + escapeHtml((m.speaker ? ('#' + m.speaker + ' 提到 ') : '提及 ') + m.targetText) + '">' + escapeHtml(spPrefix + shortTarget) + '</span>';
     }).join('');
 
     const cardCls = active
@@ -698,14 +783,29 @@ window.selectCommand = function(id) {
 
 // ==================== 右側視圖 1：文檔筆記工作台 ====================
 function renderWorkspace() {
+  const emptyStateEl = document.getElementById('workspaceEmptyState');
+  const header = document.getElementById('cmdStickyHeader');
+  const scrollBody = document.getElementById('workspaceScrollBody');
+
   const cmd = state.commands[state.ui.selectedId] || Object.values(state.commands)[0];
-  if (!cmd) return;
+
+  // 當沒有任何文檔時，顯示空白待命畫面並隱藏舊內容
+  if (!cmd) {
+    state.ui.selectedId = '';
+    emptyStateEl.classList.remove('hidden');
+    header.classList.add('hidden');
+    scrollBody.classList.add('hidden');
+    return;
+  }
+
+  emptyStateEl.classList.add('hidden');
+  header.classList.remove('hidden');
+  scrollBody.classList.remove('hidden');
   state.ui.selectedId = cmd.id;
 
   const segALabel = (state.segmentLabels && state.segmentLabels.segA) || '序號';
   const segBLabel = (state.segmentLabels && state.segmentLabels.segB) || '分類代號';
 
-  const header = document.getElementById('cmdStickyHeader');
   const catBadge = cmd.type === 'INFO' ? '指引文檔' : (cmd.category === 'wildcard' ? '未知待破譯' : '調查文檔');
   const locMeaning = state.glossary[cmd.type];
 
@@ -774,12 +874,12 @@ function renderWorkspace() {
     docStructureRow
   ].join('');
 
-  // 區塊 A：來源、衍生與「內文提及」
-  const allMentions = getAutoDetectedMentionsForCmd(cmd);
+  // 區塊 A：來源、衍生與「對話發言提及追蹤 (#誰 ➔ 提到什麼)」
+  const structuredMentions = getStructuredMentionsForCmd(cmd);
   const srcText = formatSourceLabel(cmd.source);
   const childCount = (cmd.children && cmd.children.length) ? cmd.children.length : 0;
   document.getElementById('relationSummaryText').textContent =
-    '(來源: ' + srcText + ' · 衍生: ' + childCount + ' · 提及代號: ' + allMentions.length + ')';
+    '(來源: ' + srcText + ' · 衍生: ' + childCount + ' · 提及線索: ' + structuredMentions.length + ')';
 
   const srcSelect = document.getElementById('detailSourceSelect');
   srcSelect.innerHTML = getSourceOptionsHtml(cmd.id);
@@ -805,26 +905,36 @@ function renderWorkspace() {
     }).join('');
   }
 
-  // 渲染內文提及代號膠囊 (區分自動偵測與手動標記)
+  // 渲染「誰 ➔ 提到什麼」對話提及膠囊
   const mentionBox = document.getElementById('mentionedCodesContainer');
-  if (allMentions.length === 0) {
-    mentionBox.innerHTML = '<span class="text-xs text-slate-500">當你在筆記或原文中寫到 #數字 或字典已登錄的名稱（如某人名、某房間）時，會自動顯示於此；也可由下方手動新增。</span>';
+  if (structuredMentions.length === 0) {
+    mentionBox.innerHTML = '<span class="text-xs text-slate-500">貼上含有 <code class="text-purple-300 font-mono">[7] ...客厅（Living room）...</code> 的遊戲原文、或在筆記寫下 <code class="text-purple-300 font-mono">#7提到小艾（Eddie）</code> 時，系統會自動分析並列出「誰提到了什麼」。</span>';
   } else {
-    mentionBox.innerHTML = allMentions.map(mc => {
-      const isManual = (cmd.mentionedCodes || []).includes(mc);
-      const gName = state.glossary[mc] || '點擊設定定義';
-      const removeBtn = isManual
-        ? '<button onclick="removeManualMention(\'' + escapeHtml(mc) + '\')" class="px-1.5 py-0.5 text-xs text-purple-300 hover:text-rose-300 border-l border-purple-500/30">×</button>'
+    mentionBox.innerHTML = structuredMentions.map(m => {
+      const spName = (m.speaker && state.glossary[m.speaker]) ? ('(' + state.glossary[m.speaker].split('(')[0].trim() + ')') : '';
+      const speakerHtml = m.speaker
+        ? '<button onclick="openTokenEditModal(\'' + escapeHtml(cmd.id) + '\', \'' + escapeHtml(m.speaker) + '\', -1)" class="px-2 py-1 bg-sky-950/80 text-sky-300 font-mono font-bold hover:underline border-r border-purple-500/30" title="點擊查看發言者 #' + escapeHtml(m.speaker) + '">#' + escapeHtml(m.speaker) + escapeHtml(spName) + ' <span class="text-slate-400 font-normal">提到➔</span></button>'
+        : '<span class="px-2 py-1 bg-purple-950/60 text-purple-300 border-r border-purple-500/30">💬 提及</span>';
+
+      let targetHtml = '';
+      if (m.matchedCode) {
+        const gMeaning = state.glossary[m.matchedCode] || '';
+        const showLabel = (m.targetText.replace(/^#/, '') === m.matchedCode && gMeaning)
+          ? ('#' + m.matchedCode + ' (' + gMeaning + ')')
+          : (m.targetText + ' [🔗' + (isDigitsOnly(m.matchedCode) ? ('#' + m.matchedCode) : m.matchedCode) + ']');
+        targetHtml = '<button onclick="openTokenEditModal(\'' + escapeHtml(cmd.id) + '\', \'' + escapeHtml(m.matchedCode) + '\', -1)" class="px-2.5 py-1 text-purple-200 font-mono hover:underline">' + escapeHtml(showLabel) + '</button>';
+      } else {
+        targetHtml = '<span class="px-2.5 py-1 text-amber-200 font-mono">' + escapeHtml(m.targetText) + '</span>' +
+          '<button onclick="openAssignTermModal(\'' + escapeHtml(m.targetText) + '\')" class="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 border-l border-purple-500/30 text-[11px] whitespace-nowrap" title="推理出此稱呼對應的代號後，點此一鍵寫入字典">📌 歸入字典</button>';
+      }
+
+      const removeBtn = m.isManual
+        ? '<button onclick="removeManualMention(' + m.manualIdx + ')" class="px-1.5 py-1 text-slate-400 hover:text-rose-300 border-l border-purple-500/30">×</button>'
         : '';
-      return [
-        '<div class="inline-flex items-center rounded-lg bg-purple-500/15 border border-purple-500/40 overflow-hidden">',
-          '<button onclick="openTokenEditModal(\'' + escapeHtml(cmd.id) + '\', \'' + escapeHtml(mc) + '\', -1)" class="px-2.5 py-1 text-xs font-mono text-purple-200 hover:underline flex items-center gap-1">',
-            '<span>💬 #' + escapeHtml(mc) + '</span>',
-            '<span class="opacity-85">(' + escapeHtml(gName) + ')</span>',
-          '</button>',
-          removeBtn,
-        '</div>'
-      ].join('');
+
+      return '<div class="inline-flex items-center rounded-lg bg-purple-500/10 border border-purple-500/40 overflow-hidden text-xs">' +
+        speakerHtml + targetHtml + removeBtn +
+        '</div>';
     }).join('');
   }
 
@@ -850,8 +960,8 @@ function renderWorkspace() {
   }).join('');
 
   document.getElementById('scratchQuickTokens').innerHTML =
-    '<span class="text-slate-400">點選代號組合（自動依數值由小到大排序）：</span>' +
-    peopleButtonsHtml +
+    '<span class="text-slate-400">點選已發現代號自動排序組合：</span>' +
+    (peopleButtonsHtml || '<span class="text-slate-600">尚無尾數代號資料</span>') +
     (scratchSelectedPeople.size > 0 ? '<button onclick="clearScratchPeople(\'' + escapeHtml(prefix) + '\')" class="px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 text-[11px]">清空重選</button>' : '');
 
   const scratchListEl = document.getElementById('scratchList');
@@ -888,12 +998,41 @@ function renderWorkspace() {
   renderSearchHighlightBanner(cmd);
 }
 
-window.removeManualMention = function(codeKey) {
+window.removeManualMention = function(idx) {
   const cmd = state.commands[state.ui.selectedId];
-  if (!cmd) return;
-  cmd.mentionedCodes = (cmd.mentionedCodes || []).filter(c => c !== codeKey);
+  if (!cmd || !cmd.manualMentions) return;
+  cmd.manualMentions.splice(idx, 1);
   saveState();
   renderAll();
+};
+
+// 開啟「📌 歸入字典」彈出視窗：讓玩家將對話中提到的 "小艾 (Eddie)" 或 "客厅 (Living room)" 綁定給特定代號
+window.openAssignTermModal = function(termText) {
+  const cmd = state.commands[state.ui.selectedId];
+  document.getElementById('assignTermValueInput').value = termText;
+  document.getElementById('assignTermCodeInput').value = '';
+
+  const quickCodes = [];
+  if (cmd) {
+    if (cmd.type && cmd.type !== 'SYS' && cmd.type !== 'INFO') quickCodes.push(cmd.type);
+    (cmd.tokens || []).forEach(tk => {
+      if (!tk.includes('?')) quickCodes.push(tk);
+    });
+  }
+
+  const quickBox = document.getElementById('assignTermQuickCodes');
+  if (quickCodes.length === 0) {
+    quickBox.innerHTML = '';
+  } else {
+    quickBox.innerHTML = '<span class="text-slate-400 self-center">本篇代號：</span>' +
+      quickCodes.map(c => {
+        const cur = state.glossary[c] ? (' (' + state.glossary[c].split('(')[0].trim() + ')') : '';
+        return '<button onclick="document.getElementById(\'assignTermCodeInput\').value=\'' + escapeHtml(c) + '\'" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 font-mono">' + (isDigitsOnly(c) ? ('#' + escapeHtml(c)) : escapeHtml(c)) + escapeHtml(cur) + '</button>';
+      }).join('');
+  }
+
+  document.getElementById('assignTermModal').classList.remove('hidden');
+  document.getElementById('assignTermCodeInput').focus();
 };
 
 window.toggleScratchPerson = function(prefix, token) {
@@ -934,13 +1073,13 @@ function renderSearchHighlightBanner(cmd) {
   banner.innerHTML = '<div class="text-amber-300 font-bold mb-1">🔍 搜尋關鍵字「' + escapeHtml(q) + '」高亮預覽：</div><div class="font-mono whitespace-pre-wrap text-slate-200 max-h-40 overflow-y-auto">' + highlighted + '</div>';
 }
 
-// ==================== 右側視圖 2：獨立收件匣 (Inbox Messages) ====================
+// ==================== 右側視圖 2：獨立收件匣 (新增寄件者與自動擷取「发自/主题」) ====================
 function renderInboxView() {
   const box = document.getElementById('inboxFullContainer');
   const msgs = state.inboxMessages || [];
 
   if (msgs.length === 0) {
-    box.innerHTML = '<div class="text-center py-12 text-xs text-slate-500">尚無收件匣消息，請點右上角「+ 新增收件匣消息」</div>';
+    box.innerHTML = '<div class="text-center py-12 text-xs text-slate-500">目前尚無收件匣消息，請點右上角「+ 新增收件匣消息」記錄遊戲中 <code class="text-sky-300 font-mono">inbox</code> 的信件。</div>';
     return;
   }
 
@@ -959,33 +1098,48 @@ function renderInboxView() {
       ].join('');
     }).join('');
 
+    const matchedSenderCode = msg.senderCode || matchTermToGlossaryCode(msg.sender || '');
+    const senderCodeBadge = matchedSenderCode
+      ? '<button onclick="openTokenEditModal(\'\', \'' + escapeHtml(matchedSenderCode) + '\', -1)" class="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono text-xs whitespace-nowrap" title="點擊查看此寄件者關聯代號">🔗 代號 #' + escapeHtml(matchedSenderCode) + '</button>'
+      : (msg.sender
+          ? '<button onclick="openAssignTermModal(\'' + escapeHtml(msg.sender) + '\')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs whitespace-nowrap" title="將此寄件者名稱綁定至字典代號">📌 綁定代號</button>'
+          : '');
+
     return [
       '<div class="bg-[#0d1422] border border-slate-800 rounded-2xl p-4 space-y-3">',
         '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">',
-          '<div class="flex items-center gap-2 flex-1 min-w-0">',
+          '<div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">',
             '<span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-xs font-bold shrink-0">信件 #' + (idx + 1) + '</span>',
-            '<input type="text" value="' + escapeHtml(msg.title) + '" oninput="updateInboxField(\'' + escapeHtml(msg.id) + '\', \'title\', this.value)" placeholder="輸入信件標題 (如：简述)..." class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 focus:border-sky-500 rounded-lg px-3 py-1 text-sm font-bold text-white outline-none" />',
+            '<div class="flex items-center gap-1.5 flex-1 min-w-[180px]">',
+              '<span class="text-xs text-slate-400 whitespace-nowrap">主題：</span>',
+              '<input id="inboxTitle_' + escapeHtml(msg.id) + '" type="text" value="' + escapeHtml(msg.title || '') + '" oninput="updateInboxField(\'' + escapeHtml(msg.id) + '\', \'title\', this.value)" placeholder="信件主題 (如：简述)..." class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 focus:border-sky-500 rounded-lg px-2.5 py-1 text-xs font-bold text-white outline-none" />',
+            '</div>',
+            '<div class="flex items-center gap-1.5 flex-1 min-w-[200px]">',
+              '<span class="text-xs text-amber-300/90 whitespace-nowrap"><i class="fa-regular fa-user mr-1"></i>寄件者：</span>',
+              '<input id="inboxSender_' + escapeHtml(msg.id) + '" type="text" value="' + escapeHtml(msg.sender || '') + '" oninput="updateInboxField(\'' + escapeHtml(msg.id) + '\', \'sender\', this.value)" placeholder="發自 (如：Alan Thomas)..." class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs text-amber-200 font-mono outline-none" />',
+              senderCodeBadge,
+            '</div>',
           '</div>',
-          '<div class="flex items-center gap-1.5">',
+          '<div class="flex items-center gap-1.5 shrink-0">',
             '<button onclick="scanInboxMsgForDocs(\'' + escapeHtml(msg.id) + '\')" class="px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs whitespace-nowrap"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>掃描信件內文檔指令</button>',
             '<button onclick="deleteInboxMsg(\'' + escapeHtml(msg.id) + '\')" class="px-2 py-1 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 text-xs"><i class="fa-solid fa-trash"></i></button>',
           '</div>',
         '</div>',
         '<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">',
           '<div class="space-y-1">',
-            '<label class="text-xs text-slate-400">信件內容 / 原文</label>',
-            '<textarea rows="4" oninput="updateInboxField(\'' + escapeHtml(msg.id) + '\', \'content\', this.value)" placeholder="貼上此封信件的內容..." class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-xl p-2.5 font-mono text-xs text-slate-200 outline-none">' + escapeHtml(msg.content || '') + '</textarea>',
+            '<label class="text-xs text-slate-400">信件內容 / 原文（貼上含「发自:」與「主题:」的文字會自動填入上方欄位）</label>',
+            '<textarea rows="5" oninput="handleInboxContentInput(\'' + escapeHtml(msg.id) + '\', this.value)" placeholder="貼上此封信件的完整原文..." class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-xl p-2.5 font-mono text-xs text-slate-200 outline-none">' + escapeHtml(msg.content || '') + '</textarea>',
           '</div>',
           '<div class="space-y-1">',
             '<label class="text-xs text-slate-400">信件推理筆記</label>',
-            '<textarea rows="4" oninput="updateInboxField(\'' + escapeHtml(msg.id) + '\', \'notes\', this.value)" placeholder="記錄這封信提供的關鍵提示..." class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-emerald-500 rounded-xl p-2.5 text-xs text-slate-200 outline-none">' + escapeHtml(msg.notes || '') + '</textarea>',
+            '<textarea rows="5" oninput="updateInboxField(\'' + escapeHtml(msg.id) + '\', \'notes\', this.value)" placeholder="記錄這封信提供的線索或可疑之處..." class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-emerald-500 rounded-xl p-2.5 text-xs text-slate-200 outline-none">' + escapeHtml(msg.notes || '') + '</textarea>',
           '</div>',
         '</div>',
         '<div class="bg-[#090d16] p-3 rounded-xl border border-slate-800/90 space-y-2">',
           '<label class="text-xs text-sky-300 font-medium block">🔗 此信件關聯／提及的文檔指令（點擊可跳轉至該文檔工作台）</label>',
           '<div class="flex flex-wrap gap-1.5">' + (linkedPills || '<span class="text-xs text-slate-500">尚無關聯文檔</span>') + '</div>',
           '<div class="flex items-center gap-1.5 pt-1">',
-            '<input id="inboxLinkInput_' + escapeHtml(msg.id) + '" type="text" placeholder="輸入文檔指令 (如 01-QU-1-11)..." class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-200 outline-none" onkeydown="if(event.key===\'Enter\')addInboxDocLink(\'' + escapeHtml(msg.id) + '\')" />',
+            '<input id="inboxLinkInput_' + escapeHtml(msg.id) + '" type="text" placeholder="輸入文檔名稱按 Enter 關聯..." class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-200 outline-none" onkeydown="if(event.key===\'Enter\')addInboxDocLink(\'' + escapeHtml(msg.id) + '\')" />',
             '<button onclick="addInboxDocLink(\'' + escapeHtml(msg.id) + '\')" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium whitespace-nowrap">+ 關聯文檔</button>',
           '</div>',
         '</div>',
@@ -994,11 +1148,42 @@ function renderInboxView() {
   }).join('');
 }
 
+// 當貼上信件內容時，自動偵測「发自: XXX」與「主题: YYY」
+window.handleInboxContentInput = function(msgId, val) {
+  const msg = (state.inboxMessages || []).find(m => m.id === msgId);
+  if (!msg) return;
+  msg.content = val;
+
+  let headerUpdated = false;
+  const senderMatch = val.match(/(?:发自|發自|From)\s*[:：]\s*([^\n\r]+)/i);
+  if (senderMatch && !msg.sender) {
+    msg.sender = senderMatch[1].trim();
+    const sEl = document.getElementById('inboxSender_' + msgId);
+    if (sEl) sEl.value = msg.sender;
+    headerUpdated = true;
+  }
+
+  const titleMatch = val.match(/(?:主题|主題|Subject)\s*[:：]\s*([^\n\r]+)/i);
+  if (titleMatch && (!msg.title || msg.title.startsWith('消息 #'))) {
+    msg.title = titleMatch[1].trim();
+    const tEl = document.getElementById('inboxTitle_' + msgId);
+    if (tEl) tEl.value = msg.title;
+    headerUpdated = true;
+  }
+
+  saveState();
+  if (headerUpdated) {
+    renderSourceDropdowns();
+    showToast('已自動從信件內文擷取寄件者與主題！', 'success');
+  }
+};
+
 window.updateInboxField = function(msgId, field, val) {
   const msg = (state.inboxMessages || []).find(m => m.id === msgId);
   if (!msg) return;
   msg[field] = val;
   saveState();
+  renderSourceDropdowns();
 };
 
 window.addInboxDocLink = function(msgId) {
@@ -1054,13 +1239,18 @@ window.deleteInboxMsg = function(msgId) {
   renderAll();
 };
 
-// ==================== 右側視圖 3：矩陣全覽 (修復排版撐寬問題) ====================
+// ==================== 右側視圖 3：矩陣全覽 ====================
 function renderMatrixView() {
   const container = document.getElementById('matrixFullContainer');
   const docs = Object.values(state.commands).filter(c => c.category !== 'system' && c.type !== 'INFO');
   const segALabel = (state.segmentLabels && state.segmentLabels.segA) || '序號';
   const segBLabel = (state.segmentLabels && state.segmentLabels.segB) || '分類代號';
   const segCLabel = (state.segmentLabels && state.segmentLabels.segC) || '尾數代號';
+
+  if (docs.length === 0) {
+    container.innerHTML = '<div class="text-center py-12 text-xs text-slate-500">目前尚無結構化文檔可供繪製矩陣</div>';
+    return;
+  }
 
   if (state.ui.matrixMode === 'seq-type') {
     const seqs = Array.from(new Set(docs.map(d => d.seq).filter(Boolean))).sort((a, b) => Number(a) - Number(b));
@@ -1105,7 +1295,7 @@ function renderMatrixView() {
     return;
   }
 
-  // 子模式 ②：文檔 × 尾數代號（同時標示「● 結構包含」與「💬 內文提及」）
+  // 子模式 ②：文檔 × 尾數代號（同時標示「● 結構包含」與「#誰➔提及」）
   const allTokens = getAllDiscoveredTokens();
   const sortedDocs = [...docs].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
@@ -1118,16 +1308,17 @@ function renderMatrixView() {
   const docRows = sortedDocs.map(d => {
     const st = STATUS_META[d.status] || STATUS_META.todo;
     const locName = state.glossary[d.type] ? (' [' + state.glossary[d.type].split('(')[0].trim() + ']') : '';
-    const mentions = getAutoDetectedMentionsForCmd(d);
+    const mentions = getStructuredMentionsForCmd(d);
 
     const cells = allTokens.map(tk => {
       const structCount = (d.rawTokens || []).filter(x => x === tk).length;
-      const isMentioned = mentions.includes(tk);
+      const matchedMention = mentions.find(m => m.matchedCode === tk);
       if (structCount > 0) {
         return '<td class="p-2 text-center font-mono bg-emerald-500/20 text-emerald-300 font-bold whitespace-nowrap">' + (structCount > 1 ? ('●×' + structCount) : '●') + '</td>';
       }
-      if (isMentioned) {
-        return '<td class="p-2 text-center font-mono bg-purple-500/20 text-purple-300 font-bold whitespace-nowrap" title="於內文或筆記中被提及">💬 提及</td>';
+      if (matchedMention) {
+        const spText = matchedMention.speaker ? ('#' + matchedMention.speaker + '提及') : '💬提及';
+        return '<td class="p-2 text-center font-mono bg-purple-500/20 text-purple-300 font-bold whitespace-nowrap" title="' + escapeHtml(spText + ': ' + matchedMention.targetText) + '">' + escapeHtml(spText) + '</td>';
       }
       return '<td class="p-2 text-center font-mono text-slate-700">·</td>';
     }).join('');
@@ -1139,7 +1330,7 @@ function renderMatrixView() {
     '<div class="mb-3 text-xs text-slate-300 bg-[#0f1623] p-3 rounded-xl border border-slate-800 flex flex-wrap items-center gap-4">',
       '<span>💡 <strong>交叉比對圖例</strong>：</span>',
       '<span class="text-emerald-300 font-mono">● 出現在指令結構中</span>',
-      '<span class="text-purple-300 font-mono">💬 在內文或筆記中被提及</span>',
+      '<span class="text-purple-300 font-mono">#7提及 = 該代號在對話中被 #7 提及</span>',
     '</div>',
     '<table class="matrix-table text-left border-t border-l border-slate-800 rounded-xl overflow-hidden text-xs">',
       '<thead><tr><th class="p-2.5 font-mono text-slate-300 w-52 min-w-[200px] whitespace-nowrap">文檔指令 \\ ' + escapeHtml(segCLabel) + '</th>' + tokenHeaders + '</tr></thead>',
@@ -1157,7 +1348,7 @@ window.quickCreateFromMatrix = function(seq, type) {
       status: 'todo',
       source: '',
       children: [],
-      mentionedCodes: [],
+      manualMentions: [],
       notes: '',
       rawOutput: '',
       scratchpad: [],
@@ -1168,22 +1359,25 @@ window.quickCreateFromMatrix = function(seq, type) {
   selectCommand(newId);
 };
 
-// ==================== 右側視圖 4：關聯脈絡圖 (修復直書斷行與右移溢出) ====================
+// ==================== 右側視圖 4：關聯脈絡圖 ====================
 function renderNetworkView() {
   const box = document.getElementById('networkFullContainer');
   const all = Object.values(state.commands);
   const mode = state.ui.netMode || 'cards';
 
+  if (all.length === 0) {
+    box.innerHTML = '<div class="text-xs text-slate-500 py-12 text-center">目前尚無文檔資料可供顯示脈絡圖</div>';
+    return;
+  }
+
   if (mode === 'cards') {
-    // 模式 ①：來源分組卡片（絕不因層級過深而超出右邊界）
     const groups = [];
 
-    // 1. 收件匣信件來源群組
     (state.inboxMessages || []).forEach(msg => {
       const children = all.filter(c => c.source === 'inbox:' + msg.id || (msg.linkedDocs || []).includes(c.id));
       if (children.length > 0) {
         groups.push({
-          title: '📬 收件匣：' + msg.title,
+          title: '📬 收件匣：' + (msg.title || '未命名') + (msg.sender ? (' (發自: ' + msg.sender + ')') : ''),
           subtitle: msg.notes || '',
           isInbox: true,
           children: children
@@ -1191,7 +1385,6 @@ function renderNetworkView() {
       }
     });
 
-    // 2. 各文檔衍生出的新文檔群組
     all.forEach(parent => {
       const children = all.filter(c => c.source === parent.id || (parent.children || []).includes(c.id));
       if (children.length > 0) {
@@ -1247,7 +1440,6 @@ function renderNetworkView() {
     return;
   }
 
-  // 模式 ②：緊湊樹狀檢視 (指令名稱強制 whitespace-nowrap 不斷行)
   const roots = all.filter(c => !c.source || !state.commands[c.source]);
   function renderNode(cmd, depth = 0, visited = new Set()) {
     if (visited.has(cmd.id)) return '';
@@ -1278,7 +1470,6 @@ function getAllDiscoveredTokens() {
   const s = new Set();
   Object.values(state.commands).forEach(c => {
     (c.tokens || []).forEach(t => { if (!t.includes('?')) s.add(t); });
-    (c.mentionedCodes || []).forEach(t => { if (isDigitsOnly(t)) s.add(t); });
   });
   Object.keys(state.glossary).forEach(k => {
     if (isDigitsOnly(k)) s.add(k);
@@ -1330,7 +1521,7 @@ function renderGlossaryModal() {
 
   const box = document.getElementById('glossaryTableContainer');
   if (rows.length === 0) {
-    box.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">尚無對應代號項目</div>';
+    box.innerHTML = '<div class="text-xs text-slate-500 py-6 text-center">目前尚無對應代號項目（當你新增文檔或手動登錄代號後，會自動顯示於此）</div>';
     return;
   }
 
@@ -1339,28 +1530,28 @@ function renderGlossaryModal() {
     const structText = backlinks.inStructure.length
       ? '<span class="text-emerald-400">結構出現(' + backlinks.inStructure.length + '): ' + escapeHtml(backlinks.inStructure.join(', ')) + '</span>'
       : '';
-    const mentionText = backlinks.inMentions.length
-      ? '<span class="text-purple-300">內文提及(' + backlinks.inMentions.length + '): ' + escapeHtml(backlinks.inMentions.join(', ')) + '</span>'
+    const spokenSummary = backlinks.spokenByThisCode.length
+      ? '<span class="text-sky-300">此代號曾提及: ' + escapeHtml(Array.from(new Set(backlinks.spokenByThisCode.map(s => s.targetText))).join('、')) + '</span>'
       : '';
-    const relBackText = backlinks.inGlossaryRels.length
-      ? '<span class="text-amber-300">被代號關聯: ' + escapeHtml(backlinks.inGlossaryRels.join(', ')) + '</span>'
+    const mentionedSummary = backlinks.mentionedByOthers.length
+      ? '<span class="text-purple-300">被提及於: ' + escapeHtml(backlinks.mentionedByOthers.map(m => m.docId + (m.speaker ? ('(由#' + m.speaker + ')') : '')).join(', ')) + '</span>'
       : '';
 
     return [
       '<div class="bg-[#090d16] p-3 rounded-xl border border-slate-800 space-y-2">',
         '<div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">',
           '<div class="md:col-span-2">',
-            '<span class="px-2.5 py-1 rounded border font-mono font-bold text-xs inline-block ' + r.badgeClass + '">' + escapeHtml(r.badge) + '</span>',
+            '<button onclick="openTokenEditModal(\'\', \'' + escapeHtml(r.key) + '\', -1)" class="px-2.5 py-1 rounded border font-mono font-bold text-xs inline-block hover:brightness-125 ' + r.badgeClass + '">' + escapeHtml(r.badge) + '</button>',
           '</div>',
           '<div class="md:col-span-5">',
             '<input type="text" value="' + escapeHtml(state.glossary[r.key] || '') + '" placeholder="輸入 ' + escapeHtml(r.badge) + ' 的推測定義或名稱..." oninput="updateGlossaryDirect(\'' + escapeHtml(r.key) + '\', this.value)" class="w-full bg-[#0f1623] border border-slate-700 focus:border-amber-500 rounded-lg px-3 py-1.5 text-xs text-slate-100 outline-none" />',
           '</div>',
           '<div class="md:col-span-5">',
-            '<input type="text" value="' + escapeHtml((state.glossaryRelations && state.glossaryRelations[r.key]) || '') + '" placeholder="關聯其他代號或備註（如：提到 #66, 門廳）..." oninput="updateGlossaryRelDirect(\'' + escapeHtml(r.key) + '\', this.value)" class="w-full bg-[#0f1623] border border-slate-700 focus:border-purple-500 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none" />',
+            '<input type="text" value="' + escapeHtml((state.glossaryRelations && state.glossaryRelations[r.key]) || '') + '" placeholder="關聯其他代號或備註..." oninput="updateGlossaryRelDirect(\'' + escapeHtml(r.key) + '\', this.value)" class="w-full bg-[#0f1623] border border-slate-700 focus:border-purple-500 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none" />',
           '</div>',
         '</div>',
-        ((structText || mentionText || relBackText)
-          ? '<div class="flex flex-wrap gap-3 text-[11px] font-mono pt-0.5">' + [structText, mentionText, relBackText].filter(Boolean).join(' · ') + '</div>'
+        ((structText || spokenSummary || mentionedSummary)
+          ? '<div class="flex flex-wrap gap-3 text-[11px] font-mono pt-0.5">' + [structText, spokenSummary, mentionedSummary].filter(Boolean).join(' · ') + '</div>'
           : ''),
       '</div>'
     ].join('');
@@ -1386,29 +1577,32 @@ window.updateGlossaryRelDirect = function(key, val) {
 window.openTokenEditModal = function(cmdId, tokenKey, posIndex) {
   activeTokenEdit = { cmdId: cmdId, tokenKey: tokenKey, posIndex: posIndex };
   const cmd = state.commands[cmdId];
-  document.getElementById('tokenModalTitle').textContent = '編輯代號：' + tokenKey;
-  document.getElementById('tokenModalSubtitle').textContent = '設定後所有結構包含或內文提及此代號的文檔皆會同步更新';
+  document.getElementById('tokenModalTitle').textContent = '代號詳情與編輯：' + (isDigitsOnly(tokenKey) ? ('#' + tokenKey) : tokenKey);
+  document.getElementById('tokenModalSubtitle').textContent = '可檢視此代號在所有文檔中的出場紀錄、說過的關鍵詞與被誰提及';
 
   document.getElementById('tokenGlobalInput').value = state.glossary[tokenKey] || '';
   document.getElementById('tokenRelInput').value = (state.glossaryRelations && state.glossaryRelations[tokenKey]) || '';
 
   const localSec = document.getElementById('tokenLocalSection');
-  if (posIndex >= 0) {
+  if (posIndex >= 0 && cmd) {
     localSec.classList.remove('hidden');
-    document.getElementById('tokenLocalInput').value = (cmd && cmd.localTokenNotes && cmd.localTokenNotes[posIndex]) ? cmd.localTokenNotes[posIndex] : '';
+    document.getElementById('tokenLocalInput').value = (cmd.localTokenNotes && cmd.localTokenNotes[posIndex]) ? cmd.localTokenNotes[posIndex] : '';
   } else {
     localSec.classList.add('hidden');
   }
 
-  // 顯示該代號的出場與提及反向連結
   const bl = getBacklinksForCode(tokenKey);
   const structBtns = bl.inStructure.map(id => '<button onclick="document.getElementById(\'tokenModal\').classList.add(\'hidden\');selectCommand(\'' + escapeHtml(id) + '\')" class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono hover:underline">' + escapeHtml(id) + '</button>').join(' ');
-  const mentionBtns = bl.inMentions.map(id => '<button onclick="document.getElementById(\'tokenModal\').classList.add(\'hidden\');selectCommand(\'' + escapeHtml(id) + '\')" class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono hover:underline">💬 ' + escapeHtml(id) + '</button>').join(' ');
+
+  const spokenBtns = bl.spokenByThisCode.map(item => '<button onclick="document.getElementById(\'tokenModal\').classList.add(\'hidden\');selectCommand(\'' + escapeHtml(item.docId) + '\')" class="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 font-mono hover:underline">於 ' + escapeHtml(item.docId) + ' 提到「' + escapeHtml(item.targetText) + '」</button>').join(' ');
+
+  const mentionedBtns = bl.mentionedByOthers.map(item => '<button onclick="document.getElementById(\'tokenModal\').classList.add(\'hidden\');selectCommand(\'' + escapeHtml(item.docId) + '\')" class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono hover:underline">' + escapeHtml(item.docId) + (item.speaker ? (' (由 #' + escapeHtml(item.speaker) + ' 提及)') : ' (內文提及)') + '</button>').join(' ');
 
   document.getElementById('tokenBacklinksBox').innerHTML = [
-    '<div class="text-slate-400 font-bold mb-1">📊 此代號在案情中的出現紀錄（點擊可跳轉）：</div>',
+    '<div class="text-slate-300 font-bold mb-1">📊 此代號在案情中的關聯紀錄（點擊可跳轉至該文檔）：</div>',
     '<div class="flex flex-wrap gap-1 items-center"><span class="text-slate-400">結構包含：</span>' + (structBtns || '<span class="text-slate-600">無</span>') + '</div>',
-    '<div class="flex flex-wrap gap-1 items-center pt-1"><span class="text-slate-400">內文提及：</span>' + (mentionBtns || '<span class="text-slate-600">無</span>') + '</div>'
+    '<div class="flex flex-wrap gap-1 items-center pt-1"><span class="text-sky-300/90">此代號曾提及：</span>' + (spokenBtns || '<span class="text-slate-600">無</span>') + '</div>',
+    '<div class="flex flex-wrap gap-1 items-center pt-1"><span class="text-purple-300/90">被他人提及：</span>' + (mentionedBtns || '<span class="text-slate-600">無</span>') + '</div>'
   ].join('');
 
   document.getElementById('tokenModal').classList.remove('hidden');
@@ -1451,7 +1645,6 @@ function addCommand(rawId, source = '', status = 'todo') {
   const parsed = parseCommandStructure(rawId);
   if (!parsed.id) return null;
 
-  // 若使用者在左側輸入了系統指令，自動導向系統指令面板
   if (KNOWN_SYS_CMDS.includes(parsed.id.toLowerCase())) {
     const exists = (state.systemCommands || []).some(s => s.id.toLowerCase() === parsed.id.toLowerCase());
     if (!exists) {
@@ -1475,7 +1668,7 @@ function addCommand(rawId, source = '', status = 'todo') {
     status: status,
     source: cleanSource,
     children: [],
-    mentionedCodes: [],
+    manualMentions: [],
     notes: '',
     rawOutput: '',
     scratchpad: [],
@@ -1532,7 +1725,8 @@ window.deleteCurrentCommand = function() {
   const cmd = state.commands[state.ui.selectedId];
   if (!cmd || !confirm('確定要刪除文檔「' + cmd.id + '」嗎？')) return;
   delete state.commands[cmd.id];
-  state.ui.selectedId = Object.keys(state.commands)[0] || '';
+  const remainingIds = Object.keys(state.commands);
+  state.ui.selectedId = remainingIds.length > 0 ? remainingIds[0] : '';
   saveState();
   renderAll();
 };
@@ -1687,7 +1881,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const src = document.getElementById('quickSourceSelect').value;
     const st = document.getElementById('quickStatusSelect').value;
     let count = 0;
-    lines.forEach(line => { if (addCommand(line, src, st)) count++; });
+    let lastAddedId = '';
+    lines.forEach(line => {
+      const id = addCommand(line, src, st);
+      if (id) { count++; lastAddedId = id; }
+    });
+    if (!state.ui.selectedId && lastAddedId) state.ui.selectedId = lastAddedId;
     document.getElementById('batchCmdInput').value = '';
     document.getElementById('batchDrawer').classList.add('hidden');
     saveState();
@@ -1767,22 +1966,46 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') handleAddChild();
   });
 
-  // 手動新增內文提及代號
+  // 手動新增「誰 ➔ 提到什麼」
   const handleAddMentionCode = () => {
     const cmd = state.commands[state.ui.selectedId];
-    const input = document.getElementById('addMentionCodeInput');
-    const raw = input.value.trim().replace(/^#/, '');
-    if (!cmd || !raw) return;
-    cmd.mentionedCodes = cmd.mentionedCodes || [];
-    if (!cmd.mentionedCodes.includes(raw)) cmd.mentionedCodes.push(raw);
-    input.value = '';
+    const spInput = document.getElementById('addMentionSpeakerInput');
+    const tgInput = document.getElementById('addMentionCodeInput');
+    const speaker = spInput.value.trim().replace(/^#/, '');
+    const target = tgInput.value.trim();
+    if (!cmd || !target) return;
+    cmd.manualMentions = cmd.manualMentions || [];
+    cmd.manualMentions.push({ speaker: speaker, target: target });
+    spInput.value = '';
+    tgInput.value = '';
     saveState();
     renderAll();
-    showToast('已標記本篇提及代號：#' + raw, 'success');
+    showToast('已新增對話提及紀錄', 'success');
   };
   document.getElementById('addMentionCodeBtn').addEventListener('click', handleAddMentionCode);
   document.getElementById('addMentionCodeInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') handleAddMentionCode();
+  });
+
+  // 「📌 歸入字典」彈出視窗事件
+  document.getElementById('closeAssignTermBtn').addEventListener('click', () => {
+    document.getElementById('assignTermModal').classList.add('hidden');
+  });
+  document.getElementById('cancelAssignTermBtn').addEventListener('click', () => {
+    document.getElementById('assignTermModal').classList.add('hidden');
+  });
+  document.getElementById('confirmAssignTermBtn').addEventListener('click', () => {
+    const termVal = document.getElementById('assignTermValueInput').value.trim();
+    const codeKey = document.getElementById('assignTermCodeInput').value.trim().replace(/^#/, '').toUpperCase();
+    if (!termVal || !codeKey) {
+      showToast('請輸入要綁定的代號（如 6 或 LI）');
+      return;
+    }
+    state.glossary[codeKey] = termVal;
+    document.getElementById('assignTermModal').classList.add('hidden');
+    saveState();
+    renderAll();
+    showToast('已將「' + termVal + '」歸入字典代號 ' + codeKey + '！', 'success');
   });
 
   // 新增收件匣消息
@@ -1792,6 +2015,8 @@ document.addEventListener('DOMContentLoaded', () => {
     state.inboxMessages.push({
       id: 'msg-' + Date.now(),
       title: '消息 #' + nextNum,
+      sender: '',
+      senderCode: '',
       content: '',
       notes: '',
       linkedDocs: []
@@ -1821,7 +2046,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTopStatsAndBadges();
   });
 
-  // 提取內文 [代號 名稱]
+  // 提取行首 [代號 名稱]
   document.getElementById('extractNamesBtn').addEventListener('click', () => {
     const cmd = state.commands[state.ui.selectedId];
     if (!cmd) return;
@@ -1830,9 +2055,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (added > 0) {
       saveState();
       renderAll();
-      showToast('已自動提取並登錄 ' + added + ' 筆代號名稱至字典！', 'success');
+      showToast('已自動提取並登錄 ' + added + ' 筆行首 [代號 名稱] 至字典！', 'success');
     } else {
-      showToast('未發現新的未登錄 [代號 名稱] 格式');
+      showToast('未發現新的行首 [代號 名稱] 格式（對話中提及的稱呼已列於下方紫色提及區）');
     }
   });
 
@@ -1903,9 +2128,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('rawCharCount').textContent = '(' + cmd.rawOutput.length + ' 字)';
     const added = extractBracketedCodesFromText(cmd.rawOutput);
     if (added > 0) {
-      showToast('已自動從貼上的原文識別 ' + added + ' 筆 [代號 名稱]！', 'success');
+      showToast('已自動從貼上的原文識別 ' + added + ' 筆行首 [代號 名稱]！', 'success');
     }
     saveState();
+    renderCommandList();
     renderWorkspace();
   });
 
@@ -2092,7 +2318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     lines.push('\n## 收件匣消息 (Inbox)');
     (state.inboxMessages || []).forEach(m => {
-      lines.push('\n### 📬 ' + m.title);
+      lines.push('\n### 📬 ' + m.title + (m.sender ? (' (發自: ' + m.sender + ')') : ''));
       if (m.notes) lines.push(m.notes);
     });
     lines.push('\n## 調查文檔清單');
@@ -2100,6 +2326,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const stLabel = STATUS_META[c.status] ? STATUS_META[c.status].label : '';
       lines.push('\n### ' + c.id + ' (' + stLabel + ')');
       if (c.source) lines.push('- 發現來源: `' + formatSourceLabel(c.source) + '`');
+      const mentions = getStructuredMentionsForCmd(c);
+      if (mentions.length > 0) {
+        lines.push('- 對話提及: ' + mentions.map(m => (m.speaker ? ('#' + m.speaker + '提到') : '') + m.targetText).join('、'));
+      }
       if (c.notes) lines.push('- 推理筆記:\n' + c.notes);
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
@@ -2110,15 +2340,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('resetDemoBtn').addEventListener('click', () => {
-    if (!confirm('確定要清空並重置為「無劇透初始狀態」嗎？（建議先點左側磁片按鈕匯出 JSON 備份！）')) return;
+    if (!confirm('確定要清空所有文檔、收件匣與字典，重置為「完全空白初始狀態」嗎？（建議先匯出 JSON 備份！）')) return;
     state = getInitialState();
     saveState();
     renderAll();
+    showToast('已重置為無劇透空白狀態', 'success');
   });
 
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      ['glossaryModal', 'sysCmdModal', 'tokenModal', 'focusModal', 'ioModal'].forEach(id => {
+      ['glossaryModal', 'sysCmdModal', 'tokenModal', 'assignTermModal', 'focusModal', 'ioModal'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
       });
