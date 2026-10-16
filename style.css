@@ -29,7 +29,6 @@ body[data-font-scale="xl"] {
   --badge-font-size: 14.5px;
 }
 
-/* 套用獨立縮放的閱讀區塊 */
 .content-scalable {
   font-size: var(--content-font-size) !important;
   line-height: 1.7 !important;
@@ -43,7 +42,6 @@ body[data-font-scale="xl"] {
   font-size: var(--badge-font-size) !important;
 }
 
-/* 導覽與切換按鈕啟動狀態 */
 .main-view-btn.active {
   background-color: #10b981;
   color: #052e16;
@@ -61,6 +59,7 @@ body[data-font-scale="xl"] {
 
 .list-mode-btn.active,
 .matrix-mode-btn.active,
+.net-mode-btn.active,
 .g-tab-btn.active,
 .focus-layout-btn.active,
 .font-btn.active {
@@ -69,7 +68,6 @@ body[data-font-scale="xl"] {
   font-weight: 600;
 }
 
-/* 自訂細捲軸 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -88,16 +86,23 @@ body[data-font-scale="xl"] {
   background: #334155;
 }
 
-/* 矩陣表格固定標頭與邊框 */
+/* 矩陣表格：嚴格限制欄寬，防止長筆記把單一欄位撐到幾千像素 */
 .matrix-table {
   border-collapse: separate;
   border-spacing: 0;
+  width: max-content;
 }
 
 .matrix-table th,
 .matrix-table td {
   border-right: 1px solid #1e293b;
   border-bottom: 1px solid #1e293b;
+}
+
+.matrix-cell-fixed {
+  width: 175px;
+  min-width: 175px;
+  max-width: 175px;
 }
 
 .matrix-table thead th {

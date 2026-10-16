@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TYPE HELP // 調查員終端筆記系統 v3.5</title>
+  <title>TYPE HELP // 調查員終端筆記系統 v4.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="style.css" />
@@ -12,22 +12,25 @@
 
   <!-- 頂部導覽列 -->
   <header class="bg-[#0f1623] border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 z-30">
-    <div class="flex items-center gap-2.5 flex-wrap">
-      <button id="toggleSidebarBtn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700" title="收合/展開左側指令清單">
+    <div class="flex items-center gap-2 flex-wrap">
+      <button id="toggleSidebarBtn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700" title="收合/展開左側文檔清單">
         <i class="fa-solid fa-bars"></i>
       </button>
-      <div class="flex items-center gap-2">
-        <span class="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-mono font-bold text-xs">&gt;_</span>
-        <h1 class="font-mono font-bold text-sm tracking-wide text-slate-100 whitespace-nowrap">TYPE HELP <span class="text-emerald-400 font-normal text-xs">// v3.5</span></h1>
+      <div class="flex items-center gap-1.5">
+        <span class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-mono font-bold text-xs">&gt;_</span>
+        <h1 class="font-mono font-bold text-sm tracking-wide text-slate-100 whitespace-nowrap">TYPE HELP <span class="text-emerald-400 font-normal text-xs">// v4</span></h1>
       </div>
 
-      <!-- 主視圖切換 -->
+      <!-- 主視圖切換 (筆記工作台 / 收件匣 / 矩陣全覽 / 關聯脈絡) -->
       <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 ml-1">
         <button data-main-view="workspace" class="main-view-btn active px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
-          <i class="fa-solid fa-file-signature mr-1"></i>筆記工作台
+          <i class="fa-solid fa-file-signature mr-1"></i>文檔工作台
+        </button>
+        <button data-main-view="inbox" class="main-view-btn px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
+          <i class="fa-solid fa-envelope-open-text mr-1"></i>收件匣 <span id="inboxCountBadge" class="ml-0.5 px-1 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px]">1</span>
         </button>
         <button data-main-view="matrix" class="main-view-btn px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
-          <i class="fa-solid fa-table-cells mr-1"></i>場所/人員矩陣
+          <i class="fa-solid fa-table-cells mr-1"></i>矩陣全覽
         </button>
         <button data-main-view="network" class="main-view-btn px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
           <i class="fa-solid fa-diagram-project mr-1"></i>關聯脈絡
@@ -40,22 +43,32 @@
     </div>
 
     <!-- 右側工具列 -->
-    <div class="flex items-center gap-2 flex-wrap">
-      <div id="statsBar" class="hidden xl:flex items-center gap-1.5 bg-[#090d16] px-2.5 py-1 rounded-lg border border-slate-800 text-xs font-mono whitespace-nowrap"></div>
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <div id="statsBar" class="hidden 2xl:flex items-center gap-1 bg-[#090d16] px-2 py-1 rounded-lg border border-slate-800 text-xs font-mono whitespace-nowrap"></div>
 
+      <!-- 獨立系統指令面板按鈕 -->
+      <button id="openSysCmdBtn" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition">
+        <i class="fa-solid fa-terminal"></i>
+        <span>系統指令</span>
+        <span id="sysCmdCountBadge" class="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[11px]">6</span>
+      </button>
+
+      <!-- 代號與規則字典 (無劇透中性名稱) -->
       <button id="openGlossaryBtn" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition">
-        <i class="fa-solid fa-address-book"></i>
-        <span>場所與人員名冊</span>
+        <i class="fa-solid fa-book-atlas"></i>
+        <span>代號與規則字典</span>
         <span id="glossaryCountBadge" class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 font-mono text-[11px]">0</span>
       </button>
 
-      <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 text-xs whitespace-nowrap" title="調整閱讀內容與清單字體大小">
+      <!-- 字級切換 -->
+      <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 text-xs whitespace-nowrap" title="調整閱讀內容字體大小">
         <button data-font="sm" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">A-</button>
         <button data-font="md" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">標準</button>
         <button data-font="lg" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">A+</button>
         <button data-font="xl" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">特大</button>
       </div>
 
+      <!-- 匯出 / 匯入 / 重置 -->
       <div class="flex items-center gap-1">
         <button id="exportMdBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs" title="匯出 Markdown 調查報告">
           <i class="fa-solid fa-file-lines"></i>
@@ -63,7 +76,7 @@
         <button id="openIoBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs" title="備份匯出 / 匯入 JSON">
           <i class="fa-solid fa-floppy-disk"></i>
         </button>
-        <button id="resetDemoBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 text-xs" title="重置為初始範例資料">
+        <button id="resetDemoBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 text-xs" title="清空重置為無劇透初始狀態">
           <i class="fa-solid fa-rotate-left"></i>
         </button>
       </div>
@@ -73,24 +86,24 @@
   <!-- 主工作區 -->
   <main class="flex-1 flex overflow-hidden relative">
 
-    <!-- 左側欄：快速新增 + 搜尋篩選 + 指令清單 -->
+    <!-- 左側欄：純案情文檔清單 (已將系統指令與 inbox 獨立移出) -->
     <aside id="leftPane" class="bg-[#0c121e] border-r border-slate-800 flex flex-col shrink-0 h-full overflow-hidden" style="width: 350px; min-width: 250px; max-width: 620px;">
       
-      <!-- 1. 快速新增指令 -->
+      <!-- 1. 快速新增文檔指令 -->
       <div class="p-2.5 border-b border-slate-800/80 bg-[#0f1726]">
         <div class="flex items-center gap-1.5">
-          <input id="quickCmdInput" type="text" placeholder="輸入指令 (如 06-ST-1-11)..." 
+          <input id="quickCmdInput" type="text" placeholder="新增文檔指令 (如 01-QU-1-11)..." 
             class="flex-1 min-w-0 bg-[#090d16] border border-slate-700/80 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-100 outline-none" />
           <button id="quickAddBtn" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium whitespace-nowrap shrink-0 transition">
             新增
           </button>
-          <button id="toggleBatchBtn" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs whitespace-nowrap shrink-0" title="展開批次多行新增">
+          <button id="toggleBatchBtn" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs whitespace-nowrap shrink-0" title="展開批次多行貼上">
             <i class="fa-solid fa-layer-group"></i> 批次
           </button>
         </div>
 
         <div id="batchDrawer" class="hidden mt-2 pt-2 border-t border-slate-800 space-y-2 text-xs">
-          <textarea id="batchCmdInput" rows="3" placeholder="每行一個指令，可直接貼上遊戲 list 輸出，如：&#10;(1) 00-readme&#10;06-ST-1-11"
+          <textarea id="batchCmdInput" rows="3" placeholder="每行一個指令，可直接貼上遊戲 list 輸出，如：&#10;(0) 00-readme&#10;(1) 02-EN-1-6-7-10"
             class="w-full bg-[#090d16] border border-slate-700 rounded-lg p-2 font-mono text-xs text-slate-200 outline-none focus:border-emerald-500"></textarea>
           <div class="flex items-center gap-1.5">
             <select id="quickSourceSelect" class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 font-mono">
@@ -113,7 +126,7 @@
         <div class="flex items-center gap-1.5">
           <div class="relative flex-1 min-w-0">
             <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-            <input id="searchInput" type="text" placeholder="搜尋指令、人名、場所或內文..." 
+            <input id="searchInput" type="text" placeholder="搜尋指令、代號定義或內文..." 
               class="w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-lg pl-7 pr-6 py-1.5 text-xs text-slate-200 outline-none" />
             <button id="clearSearchBtn" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs">
               <i class="fa-solid fa-xmark"></i>
@@ -131,21 +144,21 @@
         <!-- 收合式篩選抽屜 -->
         <div id="filterDrawer" class="hidden p-2.5 rounded-lg bg-[#090d16] border border-slate-800 space-y-2.5 text-xs max-h-80 overflow-y-auto">
           <div class="flex items-center justify-between">
-            <span class="text-slate-400 font-medium">分類與調查狀態</span>
+            <span class="text-slate-400 font-medium">文檔性質與狀態</span>
             <button id="resetFilterBtn" class="text-[11px] text-rose-400 hover:underline">清除全部篩選</button>
           </div>
           <div id="catFilterBar" class="flex flex-wrap gap-1"></div>
           <div id="statusFilterBar" class="flex flex-wrap gap-1"></div>
 
           <div class="pt-1 border-t border-slate-800/80">
-            <span class="text-amber-300/90 font-medium block mb-1">📍 場所代號 (Location)</span>
+            <span id="filterSegBTitle" class="text-amber-300/90 font-medium block mb-1">分類代號</span>
             <div id="typeFilterBar" class="flex flex-wrap gap-1"></div>
           </div>
 
           <div class="pt-1 border-t border-slate-800/80">
             <div class="flex items-center justify-between mb-1">
-              <span class="text-sky-300/90 font-medium">👥 在場人員交叉篩選</span>
-              <button id="tokenLogicBtn" class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 font-mono text-[10px] border border-slate-700">邏輯: AND (同時在場)</button>
+              <span id="filterSegCTitle" class="text-sky-300/90 font-medium">尾數代號（含內文提及）</span>
+              <button id="tokenLogicBtn" class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 font-mono text-[10px] border border-slate-700">邏輯: AND</button>
             </div>
             <div id="tokenFilterBar" class="flex flex-wrap gap-1"></div>
           </div>
@@ -165,14 +178,14 @@
           <select id="sortSelect" class="min-w-0 bg-[#090d16] border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-300 outline-none">
             <option value="seq">依序號排序</option>
             <option value="status">依調查狀態</option>
-            <option value="type">依場所代號</option>
+            <option value="type">依分類代號</option>
             <option value="updated">依最近編輯</option>
             <option value="alpha">依名稱 A-Z</option>
           </select>
         </div>
       </div>
 
-      <!-- 3. 指令清單主體 -->
+      <!-- 3. 文檔清單主體 -->
       <div id="cmdListContainer" class="flex-1 overflow-y-auto p-2 space-y-1 select-text"></div>
     </aside>
 
@@ -184,7 +197,7 @@
     <!-- 右側主畫面區 -->
     <section id="rightPane" class="flex-1 h-full overflow-hidden bg-[#090d16] flex flex-col min-w-0 select-text">
 
-      <!-- 視圖 1：筆記工作台 -->
+      <!-- 視圖 1：文檔筆記工作台 -->
       <div id="viewWorkspace" class="flex-1 flex flex-col h-full overflow-hidden">
         <!-- 固定頂部指令資訊列 -->
         <div id="cmdStickyHeader" class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 shrink-0 space-y-2 z-20 shadow-md"></div>
@@ -192,65 +205,87 @@
         <!-- 可捲動四大功能區塊 -->
         <div id="workspaceScrollBody" class="flex-1 overflow-y-auto p-4 space-y-3">
           
-          <!-- 區塊 A：線索關聯追蹤 -->
+          <!-- 區塊 A：線索關聯與提及追蹤 -->
           <div class="card-panel bg-[#0d1422] border border-slate-800 rounded-xl overflow-hidden">
             <div class="card-header px-3.5 py-2 bg-[#111a2c] border-b border-slate-800/80 flex items-center justify-between flex-wrap gap-2 cursor-pointer" data-collapse-target="bodyRelations">
               <div class="flex items-center gap-2 min-w-0">
                 <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform"></i>
                 <i class="fa-solid fa-code-branch text-sky-400 text-xs"></i>
-                <span class="font-bold text-xs text-sky-300 whitespace-nowrap">線索關聯追蹤</span>
+                <span class="font-bold text-xs text-sky-300 whitespace-nowrap">線索來源、衍生指令與提及追蹤</span>
                 <span id="relationSummaryText" class="text-xs text-slate-400 truncate font-mono"></span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0" onclick="event.stopPropagation()">
-                <button id="extractNamesBtn" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs whitespace-nowrap" title="自動從原文與筆記擷取 [編號 姓名] 並寫入人員名冊">
-                  <i class="fa-solid fa-user-check mr-1"></i>提取內文人名
+                <button id="extractNamesBtn" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs whitespace-nowrap" title="自動從內文擷取 [代號 名稱] 格式並存入字典">
+                  <i class="fa-solid fa-magnifying-glass-plus mr-1"></i>提取內文 [代號 名稱]
                 </button>
                 <button id="scanTextForCmdsBtn" class="px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs whitespace-nowrap">
-                  <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>掃描內文指令
+                  <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>掃描內文新指令
                 </button>
               </div>
             </div>
-            <div id="bodyRelations" class="p-3.5 grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div class="bg-[#090d16] p-3 rounded-lg border border-slate-800/80 space-y-1.5">
-                <label class="text-xs text-slate-400 block">發現來源（從哪個指令找到它的？）</label>
-                <div class="flex items-center gap-1.5">
-                  <select id="detailSourceSelect" class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none"></select>
-                  <button id="jumpToSourceBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs whitespace-nowrap shrink-0">
-                    跳轉 <i class="fa-solid fa-arrow-up-right-from-square ml-0.5 text-[10px]"></i>
-                  </button>
+            <div id="bodyRelations" class="p-3.5 space-y-3">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <!-- 發現來源 -->
+                <div class="bg-[#090d16] p-3 rounded-lg border border-slate-800/80 space-y-1.5">
+                  <label class="text-xs text-slate-400 block">發現來源（從哪封信件或哪個文檔找到它的？）</label>
+                  <div class="flex items-center gap-1.5">
+                    <select id="detailSourceSelect" class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none"></select>
+                    <button id="jumpToSourceBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs whitespace-nowrap shrink-0">
+                      跳轉 <i class="fa-solid fa-arrow-up-right-from-square ml-0.5 text-[10px]"></i>
+                    </button>
+                  </div>
+                </div>
+                <!-- 衍生發現指令 -->
+                <div class="bg-[#090d16] p-3 rounded-lg border border-slate-800/80 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <label class="text-xs text-slate-400">衍生發現指令（本篇提到的其他文檔指令）</label>
+                    <span class="text-[11px] text-slate-500 whitespace-nowrap">點 × 移除</span>
+                  </div>
+                  <div id="childrenPillsContainer" class="flex flex-wrap gap-1.5"></div>
+                  <div class="flex items-center gap-1.5 pt-1">
+                    <input id="addChildInput" type="text" placeholder="輸入衍生指令名稱按 Enter..." 
+                      class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-sky-500" />
+                    <button id="addChildBtn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium whitespace-nowrap shrink-0">
+                      + 關聯
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div class="bg-[#090d16] p-3 rounded-lg border border-slate-800/80 space-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-xs text-slate-400">衍生發現指令（本文件提及的新指令）</label>
-                  <span class="text-[11px] text-slate-500 whitespace-nowrap">點 × 移除關聯</span>
+
+              <!-- 內文提及的代號／人物／地點 (非指令結構本身，但內文有提到) -->
+              <div class="bg-[#090d16] p-3 rounded-lg border border-purple-500/30 space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <label class="text-xs text-purple-300 font-medium flex items-center gap-1.5">
+                    <i class="fa-solid fa-at"></i>
+                    <span>內文提及的代號／對象（例如本篇對話中提到某人、某代號或某地點，系統會自動偵測也可手動新增）</span>
+                  </label>
                 </div>
-                <div id="childrenPillsContainer" class="flex flex-wrap gap-1.5"></div>
+                <div id="mentionedCodesContainer" class="flex flex-wrap gap-1.5"></div>
                 <div class="flex items-center gap-1.5 pt-1">
-                  <input id="addChildInput" type="text" placeholder="輸入衍生指令名稱按 Enter..." 
-                    class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-sky-500" />
-                  <button id="addChildBtn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium whitespace-nowrap shrink-0">
-                    + 關聯
+                  <input id="addMentionCodeInput" type="text" placeholder="輸入本篇提及的代號 (如 6 或 EN 或 ST) 按 Enter..." 
+                    class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-purple-500" />
+                  <button id="addMentionCodeBtn" class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium whitespace-nowrap shrink-0">
+                    + 標記提及
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 區塊 B：未知指令破譯與「在場人員勾選組合器」 -->
+          <!-- 區塊 B：未知指令組合破譯測試板 -->
           <div class="card-panel bg-[#0d1422] border border-amber-500/30 rounded-xl overflow-hidden">
             <div class="card-header px-3.5 py-2 bg-amber-950/20 border-b border-amber-500/20 flex items-center justify-between cursor-pointer" data-collapse-target="bodyScratchpad">
               <div class="flex items-center gap-2 min-w-0">
                 <i class="fa-solid fa-chevron-down text-xs text-amber-400 transition-transform"></i>
-                <i class="fa-solid fa-users-viewfinder text-amber-400 text-xs"></i>
-                <span class="font-bold text-xs text-amber-300 whitespace-nowrap">在場人員組合破譯測試板</span>
-                <span class="text-xs text-slate-400 truncate hidden sm:inline">點選下方人物自動依序號由小到大組合成指令</span>
+                <i class="fa-solid fa-flask text-amber-400 text-xs"></i>
+                <span class="font-bold text-xs text-amber-300 whitespace-nowrap">未知指令組合測試板</span>
+                <span class="text-xs text-slate-400 truncate hidden sm:inline">點選下方代號快速組合並複製到遊戲測試</span>
               </div>
               <span id="scratchCountBadge" class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-xs whitespace-nowrap shrink-0">0 筆測試</span>
             </div>
             <div id="bodyScratchpad" class="p-3.5 space-y-2.5">
               <div class="flex items-center gap-1.5">
-                <input id="scratchInput" type="text" placeholder="點選下方人物自動排序組合，或手動輸入如 04-ST-1-11..." 
+                <input id="scratchInput" type="text" placeholder="點選下方代號自動排序組合，或手動輸入如 04-ST-1-5..." 
                   class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-100 outline-none focus:border-amber-500" />
                 <button id="addScratchBtn" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0">
                   加入測試並複製
@@ -280,9 +315,8 @@
               </div>
             </div>
             <div id="bodyNotes" class="p-3.5 space-y-2">
-              <textarea id="detailNoteInput" rows="6" placeholder="在此記錄本篇的重點證詞、人物動向、死亡線索或矛盾處..."
+              <textarea id="detailNoteInput" rows="6" placeholder="在此記錄本篇的推理筆記（若在筆記中寫到 #代號 或字典中已登錄的名稱，系統會自動建立提及關聯）..."
                 class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-emerald-500 rounded-lg p-3 text-slate-100 outline-none resize-y leading-relaxed"></textarea>
-              <div id="noteMentionedCmds" class="flex items-center flex-wrap gap-1.5 text-xs"></div>
             </div>
           </div>
 
@@ -306,7 +340,7 @@
             </div>
             <div id="bodyRaw" class="p-3.5 space-y-2">
               <div id="rawHighlightBanner" class="hidden p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/40 text-xs space-y-1"></div>
-              <textarea id="detailRawInput" rows="8" placeholder="貼上遊戲原文後，可點上方「提取內文人名」自動將 [1 约翰·霍布斯] 這類格式登入人員名冊..."
+              <textarea id="detailRawInput" rows="8" placeholder="貼上遊戲顯示的完整原文..."
                 class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-lg p-3 font-mono text-slate-200 outline-none resize-y leading-relaxed"></textarea>
             </div>
           </div>
@@ -314,36 +348,68 @@
         </div>
       </div>
 
-      <!-- 視圖 2：矩陣全覽 -->
+      <!-- 視圖 2：獨立收件匣 (Inbox Messages) -->
+      <div id="viewInbox" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+        <div class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <i class="fa-solid fa-envelope-open-text text-sky-400"></i>
+            <div>
+              <h2 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <span>收件匣消息管理 (inbox)</span>
+                <button onclick="copyText('inbox')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 font-mono text-xs border border-slate-700">複製 inbox 指令</button>
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">獨立記錄遊戲中 `inbox` 收到的每一封信件（如「简述」與後續消息），並將信件提及的文檔關聯至左側清單。</p>
+            </div>
+          </div>
+          <button id="addInboxMsgBtn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold whitespace-nowrap">
+            <i class="fa-solid fa-plus mr-1"></i>新增收件匣消息
+          </button>
+        </div>
+        <div id="inboxFullContainer" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+      </div>
+
+      <!-- 視圖 3：矩陣全覽 (修復寬度無限延伸與左上角斷行問題) -->
       <div id="viewMatrix" class="hidden flex-1 flex flex-col h-full overflow-hidden">
         <div class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
           <div>
             <h2 class="font-bold text-sm text-slate-100 flex items-center gap-2">
               <i class="fa-solid fa-table-cells text-emerald-400"></i>
-              <span>場所時序矩陣 ＆ 在場人員行蹤交叉表</span>
+              <span>全局二維矩陣 ＆ 代號交叉比對表</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-0.5">點擊任意儲存格可立即開啟該文檔筆記；點擊「+」可快速建立該場所的待測指令。</p>
+            <p class="text-xs text-slate-400 mt-0.5">已鎖定欄寬防止長文撐破表格。滑鼠移至儲存格可預覽完整筆記，點擊可直接開啟該文檔。</p>
           </div>
-          <div class="flex items-center bg-[#090d16] p-1 rounded-lg border border-slate-800 text-xs">
-            <button data-matrix-mode="seq-type" class="matrix-mode-btn active px-3 py-1 rounded-md font-medium whitespace-nowrap">
-              ① 序號 × 場所 (QU/EN/LI/ST...)
-            </button>
-            <button data-matrix-mode="doc-token" class="matrix-mode-btn px-3 py-1 rounded-md font-medium whitespace-nowrap">
-              ② 文檔 × 在場人員 (#1 ~ #11...) 行蹤表
-            </button>
+          <div class="flex items-center gap-2">
+            <div class="flex items-center bg-[#090d16] p-1 rounded-lg border border-slate-800 text-xs">
+              <button data-matrix-mode="seq-type" id="matrixModeBtn1" class="matrix-mode-btn active px-3 py-1 rounded-md font-medium whitespace-nowrap">
+                ① 序號 × 分類代號
+              </button>
+              <button data-matrix-mode="doc-token" id="matrixModeBtn2" class="matrix-mode-btn px-3 py-1 rounded-md font-medium whitespace-nowrap">
+                ② 文檔 × 尾數代號（含提及）
+              </button>
+            </div>
           </div>
         </div>
         <div id="matrixFullContainer" class="flex-1 overflow-auto p-4"></div>
       </div>
 
-      <!-- 視圖 3：關聯脈絡圖 -->
+      <!-- 視圖 4：關聯脈絡圖 (修復直書斷行與右移溢出問題) -->
       <div id="viewNetwork" class="hidden flex-1 flex flex-col h-full overflow-hidden">
-        <div class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 shrink-0">
-          <h2 class="font-bold text-sm text-slate-100 flex items-center gap-2">
-            <i class="fa-solid fa-diagram-project text-sky-400"></i>
-            <span>線索發現來源脈絡圖</span>
-          </h2>
-          <p class="text-xs text-slate-400 mt-0.5">依據「從哪個指令發現哪些新指令」排列的調查推演樹狀結構。</p>
+        <div class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div>
+            <h2 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-diagram-project text-sky-400"></i>
+              <span>線索發現來源脈絡圖</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">清楚呈現「從哪封信或哪份文檔發現了哪些新指令」，不再因層級過深而超出畫面。</p>
+          </div>
+          <div class="flex items-center bg-[#090d16] p-1 rounded-lg border border-slate-800 text-xs">
+            <button data-net-mode="cards" class="net-mode-btn active px-3 py-1 rounded-md font-medium whitespace-nowrap">
+              ① 來源分組卡片（推薦，不溢出）
+            </button>
+            <button data-net-mode="tree" class="net-mode-btn px-3 py-1 rounded-md font-medium whitespace-nowrap">
+              ② 階層樹狀檢視
+            </button>
+          </div>
         </div>
         <div id="networkFullContainer" class="flex-1 overflow-auto p-4 space-y-3"></div>
       </div>
@@ -351,53 +417,72 @@
     </section>
   </main>
 
-  <!-- 彈出視窗 1：場所與人員名冊 (Glossary) -->
+  <!-- 彈出視窗 1：代號與規則字典 (支援代號互相關聯 #88->#66 + 自訂結構標籤名稱) -->
   <div id="glossaryModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
       <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <i class="fa-solid fa-address-book text-amber-400"></i>
-          <h3 class="font-bold text-base text-slate-100">場所代號與在場人員名冊 (Locations & Characters)</h3>
+          <i class="fa-solid fa-book-atlas text-amber-400"></i>
+          <h3 class="font-bold text-base text-slate-100">代號與規則字典 (Code & Entity Glossary)</h3>
         </div>
         <button id="closeGlossaryBtn" class="text-slate-400 hover:text-white text-lg px-2"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <div class="p-5 overflow-y-auto space-y-4 flex-1 select-text">
-        <div class="bg-[#090d16] border border-amber-500/30 rounded-xl p-3.5 space-y-1.5">
-          <div class="flex items-center justify-between">
+        <!-- 1. 規則假說與無劇透自訂標籤名稱 -->
+        <div class="bg-[#090d16] border border-amber-500/30 rounded-xl p-3.5 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <label class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-              <i class="fa-solid fa-lightbulb"></i> 指令命名結構與推理備忘錄
+              <i class="fa-solid fa-sliders"></i> 結構顯示名稱自訂（預設為中性無劇透名稱，當你推理出規律後可自行改名為「場所」、「在場人員」等）
             </label>
             <button id="scanAllDocsNamesBtn" class="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-medium">
-              <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>從所有文檔原文一鍵提取 [編號 人名]
+              <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>從全部文檔提取 [代號 名稱]
             </button>
           </div>
-          <textarea id="ruleHypothesisInput" rows="2" placeholder="例如：第一段數字為事件時間序；第二段英文為房間場所 (如 ST=書房)；第三段以後由小到大排列的數字為當時在場人員編號..."
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div class="flex items-center gap-2 bg-[#0f1623] px-3 py-1.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 whitespace-nowrap">第一段 (01, 02)：</span>
+              <input id="labelSegAInput" type="text" placeholder="序號" class="flex-1 min-w-0 bg-transparent text-emerald-300 font-bold outline-none" />
+            </div>
+            <div class="flex items-center gap-2 bg-[#0f1623] px-3 py-1.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 whitespace-nowrap">第二段 (QU, ST)：</span>
+              <input id="labelSegBInput" type="text" placeholder="分類代號" class="flex-1 min-w-0 bg-transparent text-amber-300 font-bold outline-none" />
+            </div>
+            <div class="flex items-center gap-2 bg-[#0f1623] px-3 py-1.5 rounded-lg border border-slate-800">
+              <span class="text-slate-400 whitespace-nowrap">第三段後 (#1, #11)：</span>
+              <input id="labelSegCInput" type="text" placeholder="尾數代號" class="flex-1 min-w-0 bg-transparent text-sky-300 font-bold outline-none" />
+            </div>
+          </div>
+          <textarea id="ruleHypothesisInput" rows="2" placeholder="在此隨時記錄你對指令命名規則或案情時間軸的整體推論..."
             class="w-full bg-[#0f1623] border border-slate-800 focus:border-amber-500 rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-y"></textarea>
         </div>
 
-        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-[#090d16] p-3 rounded-xl border border-slate-800">
+        <!-- 2. 手動新增代號或關聯 -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-2 bg-[#090d16] p-3 rounded-xl border border-slate-800">
           <input id="glossaryKeyInput" type="text" placeholder="代號 (如 ST 或 11)" 
-            class="w-full sm:w-44 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 outline-none focus:border-amber-500" />
-          <input id="glossaryValInput" type="text" placeholder="輸入場所或人員姓名（例如：書房 (Study) / 索頓 (Thornton)）..." 
-            class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500" />
-          <button id="saveGlossaryBtn" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0">
-            儲存註解
+            class="md:col-span-2 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 outline-none focus:border-amber-500" />
+          <input id="glossaryValInput" type="text" placeholder="推測定義／名稱（如：Jack / 某房間）..." 
+            class="md:col-span-5 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500" />
+          <input id="glossaryRelInput" type="text" placeholder="關聯其他代號或備註（如：提到 #66, 門廳, EN）..." 
+            class="md:col-span-3 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-purple-500" />
+          <button id="saveGlossaryBtn" class="md:col-span-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs whitespace-nowrap">
+            儲存字典條目
           </button>
         </div>
 
+        <!-- 3. 分類頁籤 -->
         <div class="flex items-center gap-1.5 border-b border-slate-800 pb-2 text-xs overflow-x-auto">
-          <button data-g-tab="tokens" class="g-tab-btn active px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
-            👥 在場人員編號 (#1, #5, #11...)
+          <button data-g-tab="tokens" id="gTabBtnTokens" class="g-tab-btn active px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            ③ 尾數代號 (#1, #5, #11...)
           </button>
-          <button data-g-tab="types" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
-            📍 場所代號 (QU, EN, LI, ST, DI...)
+          <button data-g-tab="types" id="gTabBtnTypes" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            ② 分類代號 (QU, EN, LI, ST...)
           </button>
-          <button data-g-tab="seqs" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
-            🕒 序號階段 (00, 01, 02...)
+          <button data-g-tab="seqs" id="gTabBtnSeqs" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            ① 序號階段 (00, 01, 02...)
           </button>
           <button data-g-tab="all" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
-            全部已設定名冊
+            全部條目與互相關聯
           </button>
         </div>
 
@@ -406,33 +491,66 @@
     </div>
   </div>
 
-  <!-- 彈出視窗 2：單一場所/人員快速編輯器 -->
+  <!-- 彈出視窗 2：獨立系統指令面板 (help, inbox, list, name, note, save) -->
+  <div id="sysCmdModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-terminal text-emerald-400"></i>
+          <h3 class="font-bold text-base text-slate-100">系統指令備忘錄 (System Commands)</h3>
+        </div>
+        <button id="closeSysCmdBtn" class="text-slate-400 hover:text-white text-lg px-2"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-4 flex-1 select-text">
+        <p class="text-xs text-slate-400">將系統功能指令獨立收納於此，保持左側文檔清單乾淨。當遊戲中透過 <code class="text-emerald-300 font-mono">help</code> 解鎖新系統指令時可隨時新增。</p>
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-[#090d16] p-3 rounded-xl border border-slate-800">
+          <input id="sysKeyInput" type="text" placeholder="指令 (如 name)" class="w-full sm:w-36 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-100 outline-none" />
+          <input id="sysDescInput" type="text" placeholder="功能說明或用法備註..." class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 outline-none" />
+          <button id="addSysCmdBtn" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold whitespace-nowrap">新增指令</button>
+        </div>
+        <div id="sysCmdListContainer" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈出視窗 3：單一代號快速編輯器 (含反向提及預覽) -->
   <div id="tokenModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-xl p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div>
-          <h3 id="tokenModalTitle" class="font-bold text-sm text-slate-100 font-mono">編輯名冊註解</h3>
+          <h3 id="tokenModalTitle" class="font-bold text-sm text-slate-100 font-mono">編輯代號資訊</h3>
           <p id="tokenModalSubtitle" class="text-xs text-slate-400 mt-0.5"></p>
         </div>
         <button id="closeTokenModalBtn" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <div class="space-y-3 text-xs">
+      <div class="space-y-3 text-xs select-text">
         <div class="bg-[#090d16] p-3.5 rounded-xl border border-slate-800 space-y-1.5">
           <label class="font-bold text-sky-300 block">
-            🌐 全域場所／人員名稱（所有出現此代號的文檔皆會同步顯示）
+            🌐 全域代號定義／推測名稱
           </label>
-          <input id="tokenGlobalInput" type="text" placeholder="例如：約翰·霍布斯 (John Hobbes) 或 書房 (Study)..." 
+          <input id="tokenGlobalInput" type="text" placeholder="輸入此代號代表的名稱或意義..." 
             class="w-full bg-[#0f1623] border border-slate-700 focus:border-sky-500 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none" />
+        </div>
+
+        <div class="bg-[#090d16] p-3.5 rounded-xl border border-purple-500/30 space-y-1.5">
+          <label class="font-bold text-purple-300 block">
+            🔗 此代號關聯的其他代號／備註（如：提到 #66, 門廳, EN）
+          </label>
+          <input id="tokenRelInput" type="text" placeholder="例如：與 #6 關係密切、常出現在 ST..." 
+            class="w-full bg-[#0f1623] border border-slate-700 focus:border-purple-500 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none" />
         </div>
 
         <div id="tokenLocalSection" class="bg-[#090d16] p-3.5 rounded-xl border border-amber-500/30 space-y-1.5">
           <label class="font-bold text-amber-300 block">
-            📌 本篇特定備註（僅顯示於本篇文檔，例如該人物在本場次的特殊狀態）
+            📌 本篇特定位置備註（僅顯示於目前這篇文檔）
           </label>
           <input id="tokenLocalInput" type="text" placeholder="選填，僅針對本篇文檔的補充說明..." 
             class="w-full bg-[#0f1623] border border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none" />
         </div>
+
+        <!-- 該代號的出場與被提及統計 -->
+        <div id="tokenBacklinksBox" class="bg-[#090d16] p-3 rounded-xl border border-slate-800 space-y-1.5"></div>
       </div>
 
       <div class="flex justify-end gap-2 pt-2">
@@ -442,7 +560,7 @@
     </div>
   </div>
 
-  <!-- 彈出視窗 3：全螢幕並排大視窗 -->
+  <!-- 彈出視窗 4：全螢幕並排大視窗 -->
   <div id="focusModal" class="hidden fixed inset-0 bg-[#070a12]/95 backdrop-blur-md z-50 flex flex-col p-3 sm:p-5">
     <div class="bg-[#0f1623] border border-slate-700 rounded-2xl flex-1 flex flex-col overflow-hidden shadow-2xl">
       <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
@@ -479,7 +597,7 @@
     </div>
   </div>
 
-  <!-- 彈出視窗 4：匯出與匯入備份 -->
+  <!-- 彈出視窗 5：匯出與匯入備份 -->
   <div id="ioModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-2xl p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
