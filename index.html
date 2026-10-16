@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TYPE HELP // 調查員終端筆記系統 v3.0</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-[#090d16] text-slate-200 h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- 頂部導覽列 -->
+  <header class="bg-[#0f1623] border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 z-30">
+    <!-- 左側：標題與主視圖切換 -->
+    <div class="flex items-center gap-2.5 flex-wrap">
+      <button id="toggleSidebarBtn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700" title="收合/展開左側指令清單">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-mono font-bold text-xs">&gt;_</span>
+        <h1 class="font-mono font-bold text-sm tracking-wide text-slate-100 whitespace-nowrap">TYPE HELP <span class="text-emerald-400 font-normal text-xs">// v3</span></h1>
+      </div>
+
+      <!-- 右側大畫面模式切換 (筆記 / 矩陣 / 脈絡) -->
+      <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 ml-1">
+        <button data-main-view="workspace" class="main-view-btn active px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
+          <i class="fa-solid fa-file-signature mr-1"></i>筆記工作台
+        </button>
+        <button data-main-view="matrix" class="main-view-btn px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
+          <i class="fa-solid fa-table-cells mr-1"></i>矩陣全覽
+        </button>
+        <button data-main-view="network" class="main-view-btn px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition">
+          <i class="fa-solid fa-diagram-project mr-1"></i>關聯脈絡
+        </button>
+      </div>
+
+      <span id="saveIndicator" class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 whitespace-nowrap">
+        ● 已自動存檔
+      </span>
+    </div>
+
+    <!-- 右側：統計、字典、字級與備份 -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- 狀態統計快速過濾 -->
+      <div id="statsBar" class="hidden xl:flex items-center gap-1.5 bg-[#090d16] px-2.5 py-1 rounded-lg border border-slate-800 text-xs font-mono whitespace-nowrap"></div>
+
+      <!-- 代號與規則字典 -->
+      <button id="openGlossaryBtn" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition">
+        <i class="fa-solid fa-book-atlas"></i>
+        <span>代號與規則字典</span>
+        <span id="glossaryCountBadge" class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 font-mono text-[11px]">0</span>
+      </button>
+
+      <!-- 內容字體大小切換 (不影響按鈕排版) -->
+      <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 text-xs whitespace-nowrap" title="調整閱讀內容與清單字體大小（不擠壓介面按鈕）">
+        <button data-font="sm" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">A-</button>
+        <button data-font="md" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">標準</button>
+        <button data-font="lg" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">A+</button>
+        <button data-font="xl" class="font-btn px-2 py-0.5 rounded text-slate-400 hover:text-slate-200">特大</button>
+      </div>
+
+      <!-- 匯出 / 匯入 / 重置 -->
+      <div class="flex items-center gap-1">
+        <button id="exportMdBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs" title="匯出 Markdown 調查報告">
+          <i class="fa-solid fa-file-lines"></i>
+        </button>
+        <button id="openIoBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs" title="備份匯出 / 匯入 JSON">
+          <i class="fa-solid fa-floppy-disk"></i>
+        </button>
+        <button id="resetDemoBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 text-xs" title="重置為初始範例資料">
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主工作區 (雙欄可拖曳調整寬度) -->
+  <main class="flex-1 flex overflow-hidden relative">
+
+    <!-- 左側欄：快速新增 + 搜尋篩選 + 指令清單 -->
+    <aside id="leftPane" class="bg-[#0c121e] border-r border-slate-800 flex flex-col shrink-0 h-full overflow-hidden" style="width: 330px; min-width: 240px; max-width: 600px;">
+      
+      <!-- 1. 快速新增指令 -->
+      <div class="p-2.5 border-b border-slate-800/80 bg-[#0f1726]">
+        <div class="flex items-center gap-1.5">
+          <input id="quickCmdInput" type="text" placeholder="輸入指令 (如 01-QU-1-11)..." 
+            class="flex-1 min-w-0 bg-[#090d16] border border-slate-700/80 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-100 outline-none" />
+          <button id="quickAddBtn" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium whitespace-nowrap shrink-0 transition">
+            新增
+          </button>
+          <button id="toggleBatchBtn" class="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs whitespace-nowrap shrink-0" title="展開批次多行新增或指定來源">
+            <i class="fa-solid fa-layer-group"></i> 批次
+          </button>
+        </div>
+
+        <!-- 批次新增抽屜 (預設隱藏) -->
+        <div id="batchDrawer" class="hidden mt-2 pt-2 border-t border-slate-800 space-y-2 text-xs">
+          <textarea id="batchCmdInput" rows="3" placeholder="每行一個指令，可直接貼上遊戲 list 輸出，如：&#10;(1) 00-readme&#10;02-EN-1-6-7-10"
+            class="w-full bg-[#090d16] border border-slate-700 rounded-lg p-2 font-mono text-xs text-slate-200 outline-none focus:border-emerald-500"></textarea>
+          <div class="flex items-center gap-1.5">
+            <select id="quickSourceSelect" class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 font-mono">
+              <option value="">來源：無</option>
+            </select>
+            <select id="quickStatusSelect" class="bg-[#090d16] border border-slate-700 rounded px-2 py-1 text-xs text-slate-300">
+              <option value="todo">待調查</option>
+              <option value="investigating">調查中</option>
+              <option value="solved">已解開</option>
+            </select>
+            <button id="batchAddSubmitBtn" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium whitespace-nowrap">
+              匯入
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 搜尋與篩選控制列 -->
+      <div class="p-2.5 border-b border-slate-800/80 space-y-2 bg-[#0c121e]">
+        <div class="flex items-center gap-1.5">
+          <div class="relative flex-1 min-w-0">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input id="searchInput" type="text" placeholder="搜尋指令、筆記或內文..." 
+              class="w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-lg pl-7 pr-6 py-1.5 text-xs text-slate-200 outline-none" />
+            <button id="clearSearchBtn" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <button id="toggleFilterBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs whitespace-nowrap shrink-0 flex items-center gap-1">
+            <i class="fa-solid fa-filter text-[11px]"></i>
+            <span>篩選</span>
+            <span id="activeFilterCount" class="hidden px-1 rounded bg-sky-500 text-slate-950 font-bold text-[10px]">0</span>
+          </button>
+        </div>
+
+        <!-- 已啟用篩選標籤列 -->
+        <div id="activeFilterPills" class="hidden flex flex-wrap gap-1 pt-0.5"></div>
+
+        <!-- 收合式多維度篩選抽屜 -->
+        <div id="filterDrawer" class="hidden p-2.5 rounded-lg bg-[#090d16] border border-slate-800 space-y-2.5 text-xs max-h-72 overflow-y-auto">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400 font-medium">分類與狀態</span>
+            <button id="resetFilterBtn" class="text-[11px] text-rose-400 hover:underline">清除全部篩選</button>
+          </div>
+          <div id="catFilterBar" class="flex flex-wrap gap-1"></div>
+          <div id="statusFilterBar" class="flex flex-wrap gap-1"></div>
+
+          <div class="pt-1 border-t border-slate-800/80">
+            <span class="text-slate-400 font-medium block mb-1">文檔類型 (Type)</span>
+            <div id="typeFilterBar" class="flex flex-wrap gap-1"></div>
+          </div>
+
+          <div class="pt-1 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-slate-400 font-medium">尾數參數交叉篩選</span>
+              <button id="tokenLogicBtn" class="px-1.5 py-0.5 rounded bg-slate-800 text-sky-400 font-mono text-[10px] border border-slate-700">邏輯: AND</button>
+            </div>
+            <div id="tokenFilterBar" class="flex flex-wrap gap-1"></div>
+          </div>
+        </div>
+
+        <!-- 清單模式切換 (簡化 / 詳細) 與排序 -->
+        <div class="flex items-center justify-between gap-1.5 pt-0.5">
+          <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 shrink-0">
+            <button data-list-mode="compact" class="list-mode-btn active px-2 py-1 rounded text-xs whitespace-nowrap">
+              <i class="fa-solid fa-bars mr-1"></i>簡化
+            </button>
+            <button data-list-mode="detailed" class="list-mode-btn px-2 py-1 rounded text-xs whitespace-nowrap">
+              <i class="fa-solid fa-id-card mr-1"></i>詳細
+            </button>
+          </div>
+
+          <select id="sortSelect" class="min-w-0 bg-[#090d16] border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-300 outline-none">
+            <option value="seq">依序號排序</option>
+            <option value="status">依調查狀態</option>
+            <option value="type">依類型代碼</option>
+            <option value="updated">依最近編輯</option>
+            <option value="alpha">依名稱 A-Z</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 3. 指令清單主體 -->
+      <div id="cmdListContainer" class="flex-1 overflow-y-auto p-2 space-y-1 select-text"></div>
+    </aside>
+
+    <!-- 可拖曳分隔條 (Resizer) -->
+    <div id="paneResizer" class="w-1.5 bg-slate-900 hover:bg-emerald-500/60 cursor-col-resize shrink-0 transition-colors flex items-center justify-center group" title="左右拖曳調整欄位寬度">
+      <div class="w-0.5 h-8 bg-slate-700 group-hover:bg-white rounded"></div>
+    </div>
+
+    <!-- 右側主畫面區 (支援三種視圖：筆記工作台 / 矩陣全覽 / 關聯脈絡) -->
+    <section id="rightPane" class="flex-1 h-full overflow-hidden bg-[#090d16] flex flex-col min-w-0 select-text">
+
+      <!-- 視圖 1：筆記工作台 -->
+      <div id="viewWorkspace" class="flex-1 flex flex-col h-full overflow-hidden">
+        <!-- 固定頂部指令資訊列 (Sticky Header) -->
+        <div id="cmdStickyHeader" class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 shrink-0 space-y-2.5 z-10"></div>
+
+        <!-- 可捲動四大功能區塊 -->
+        <div id="workspaceScrollBody" class="flex-1 overflow-y-auto p-4 space-y-3">
+          
+          <!-- 區塊 A：線索關聯追蹤 -->
+          <div class="card-panel bg-[#0d1422] border border-slate-800 rounded-xl overflow-hidden">
+            <div class="card-header px-3.5 py-2 bg-[#111a2c] border-b border-slate-800/80 flex items-center justify-between cursor-pointer" data-collapse-target="bodyRelations">
+              <div class="flex items-center gap-2 min-w-0">
+                <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform"></i>
+                <i class="fa-solid fa-code-branch text-sky-400 text-xs"></i>
+                <span class="font-bold text-xs text-sky-300 whitespace-nowrap">線索關聯追蹤</span>
+                <span id="relationSummaryText" class="text-xs text-slate-400 truncate font-mono"></span>
+              </div>
+              <button id="scanTextForCmdsBtn" class="px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs whitespace-nowrap shrink-0" onclick="event.stopPropagation()">
+                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>掃描內文指令
+              </button>
+            </div>
+            <div id="bodyRelations" class="p-3.5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <!-- 發現來源 -->
+              <div class="bg-[#090d16] p-3 rounded-lg border border-slate-800/80 space-y-1.5">
+                <label class="text-xs text-slate-400 block">發現來源（從哪個指令找到它的？）</label>
+                <div class="flex items-center gap-1.5">
+                  <select id="detailSourceSelect" class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none"></select>
+                  <button id="jumpToSourceBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs whitespace-nowrap shrink-0">
+                    跳轉 <i class="fa-solid fa-arrow-up-right-from-square ml-0.5 text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+              <!-- 衍生發現指令 -->
+              <div class="bg-[#090d16] p-3 rounded-lg border border-slate-800/80 space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs text-slate-400">衍生發現指令（本文件提及的新指令）</label>
+                  <span class="text-[11px] text-slate-500 whitespace-nowrap">點 × 移除關聯</span>
+                </div>
+                <div id="childrenPillsContainer" class="flex flex-wrap gap-1.5"></div>
+                <div class="flex items-center gap-1.5 pt-1">
+                  <input id="addChildInput" type="text" placeholder="輸入衍生指令名稱按 Enter..." 
+                    class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-sky-500" />
+                  <button id="addChildBtn" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium whitespace-nowrap shrink-0">
+                    + 關聯
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 區塊 B：未知指令破譯與猜測測試板 -->
+          <div class="card-panel bg-[#0d1422] border border-amber-500/30 rounded-xl overflow-hidden">
+            <div class="card-header px-3.5 py-2 bg-amber-950/20 border-b border-amber-500/20 flex items-center justify-between cursor-pointer" data-collapse-target="bodyScratchpad">
+              <div class="flex items-center gap-2 min-w-0">
+                <i id="scratchChevron" class="fa-solid fa-chevron-down text-xs text-amber-400 transition-transform"></i>
+                <i class="fa-solid fa-flask text-amber-400 text-xs"></i>
+                <span class="font-bold text-xs text-amber-300 whitespace-nowrap">未知指令破譯測試板</span>
+                <span class="text-xs text-slate-400 truncate hidden sm:inline">記錄嘗試過的組合，避免重複測試</span>
+              </div>
+              <span id="scratchCountBadge" class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-xs whitespace-nowrap shrink-0">0 筆測試</span>
+            </div>
+            <div id="bodyScratchpad" class="p-3.5 space-y-2.5">
+              <div class="flex items-center gap-1.5">
+                <input id="scratchInput" type="text" placeholder="輸入猜測組合，例如 04-ST-1-6..." 
+                  class="flex-1 min-w-0 bg-[#090d16] border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-100 outline-none focus:border-amber-500" />
+                <button id="addScratchBtn" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0">
+                  加入測試並複製
+                </button>
+              </div>
+              <div id="scratchQuickTokens" class="flex items-center flex-wrap gap-1 text-xs"></div>
+              <div id="scratchList" class="space-y-1.5 pt-1"></div>
+            </div>
+          </div>
+
+          <!-- 區塊 C：調查員推理筆記與線索摘要 -->
+          <div class="card-panel bg-[#0d1422] border border-slate-800 rounded-xl overflow-hidden">
+            <div class="card-header px-3.5 py-2 bg-[#111a2c] border-b border-slate-800/80 flex items-center justify-between flex-wrap gap-2 cursor-pointer" data-collapse-target="bodyNotes">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform"></i>
+                <i class="fa-solid fa-pen-nib text-emerald-400 text-xs"></i>
+                <span class="font-bold text-xs text-emerald-300 whitespace-nowrap">調查員推理筆記</span>
+                <span id="noteCharCount" class="text-xs text-slate-400 font-mono whitespace-nowrap">(0 字)</span>
+              </div>
+              <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                <button class="height-btn px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs whitespace-nowrap" data-target="detailNoteInput" data-h="160">標準</button>
+                <button class="height-btn px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs whitespace-nowrap" data-target="detailNoteInput" data-h="340">加高</button>
+                <button class="auto-fit-btn px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs whitespace-nowrap" data-target="detailNoteInput">↕ 撐開</button>
+                <button class="open-focus-btn px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs whitespace-nowrap">
+                  <i class="fa-solid fa-expand mr-1"></i>彈出放大
+                </button>
+              </div>
+            </div>
+            <div id="bodyNotes" class="p-3.5 space-y-2">
+              <textarea id="detailNoteInput" rows="6" placeholder="在此記錄本篇的重點人物、時間、矛盾處，或對特定數字的推理..."
+                class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-emerald-500 rounded-lg p-3 text-slate-100 outline-none resize-y leading-relaxed"></textarea>
+              <div id="noteMentionedCmds" class="flex items-center flex-wrap gap-1.5 text-xs"></div>
+            </div>
+          </div>
+
+          <!-- 區塊 D：遊戲輸出原文紀錄 -->
+          <div class="card-panel bg-[#0d1422] border border-slate-800 rounded-xl overflow-hidden">
+            <div class="card-header px-3.5 py-2 bg-[#111a2c] border-b border-slate-800/80 flex items-center justify-between flex-wrap gap-2 cursor-pointer" data-collapse-target="bodyRaw">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform"></i>
+                <i class="fa-solid fa-terminal text-sky-400 text-xs"></i>
+                <span class="font-bold text-xs text-slate-200 whitespace-nowrap">遊戲輸出原文紀錄</span>
+                <span id="rawCharCount" class="text-xs text-slate-400 font-mono whitespace-nowrap">(0 字)</span>
+              </div>
+              <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                <button class="height-btn px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs whitespace-nowrap" data-target="detailRawInput" data-h="200">標準</button>
+                <button class="height-btn px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs whitespace-nowrap" data-target="detailRawInput" data-h="420">加高</button>
+                <button class="auto-fit-btn px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs whitespace-nowrap" data-target="detailRawInput">↕ 撐開</button>
+                <button class="open-focus-btn px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-xs whitespace-nowrap">
+                  <i class="fa-solid fa-expand mr-1"></i>彈出放大
+                </button>
+              </div>
+            </div>
+            <div id="bodyRaw" class="p-3.5 space-y-2">
+              <div id="rawHighlightBanner" class="hidden p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/40 text-xs space-y-1"></div>
+              <textarea id="detailRawInput" rows="8" placeholder="將遊戲輸入指令後顯示的完整原文貼在此處，支援全文搜尋與一鍵掃描新指令..."
+                class="content-scalable w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-lg p-3 font-mono text-slate-200 outline-none resize-y leading-relaxed"></textarea>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 視圖 2：矩陣全覽 (寬版雙模式：序號×類型 / 文檔×尾數參數交叉表) -->
+      <div id="viewMatrix" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+        <div class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div>
+            <h2 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-table-cells text-emerald-400"></i>
+              <span>全局二維矩陣與尾數交叉比對表</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">在寬敞畫面檢視所有檔案分佈。點擊任意儲存格可立即開啟該文檔筆記；點擊「+」可快速建立待測指令。</p>
+          </div>
+          <!-- 矩陣子模式切換 -->
+          <div class="flex items-center bg-[#090d16] p-1 rounded-lg border border-slate-800 text-xs">
+            <button data-matrix-mode="seq-type" class="matrix-mode-btn active px-3 py-1 rounded-md font-medium whitespace-nowrap">
+              ① 序號 × 類型 (QU/EN/LI/ST)
+            </button>
+            <button data-matrix-mode="doc-token" class="matrix-mode-btn px-3 py-1 rounded-md font-medium whitespace-nowrap">
+              ② 文檔 × 尾數參數 (1, 4, 6...) 交叉表
+            </button>
+          </div>
+        </div>
+        <div id="matrixFullContainer" class="flex-1 overflow-auto p-4"></div>
+      </div>
+
+      <!-- 視圖 3：關聯脈絡圖 (寬版來源樹) -->
+      <div id="viewNetwork" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+        <div class="bg-[#0f1623] border-b border-slate-800 px-4 py-3 shrink-0">
+          <h2 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-diagram-project text-sky-400"></i>
+            <span>線索發現來源脈絡圖</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">依據「從哪個指令發現哪些新指令」排列的調查推演樹狀結構。</p>
+        </div>
+        <div id="networkFullContainer" class="flex-1 overflow-auto p-4 space-y-3"></div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- 彈出視窗 1：代號與規則字典 (升級版：含規則假說 + 自動抓取序號/類型/尾數) -->
+  <div id="glossaryModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-book-atlas text-amber-400"></i>
+          <h3 class="font-bold text-base text-slate-100">代號與命名規則推測字典 (Code & Token Glossary)</h3>
+        </div>
+        <button id="closeGlossaryBtn" class="text-slate-400 hover:text-white text-lg px-2"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4 flex-1 select-text">
+        <!-- 1. 命名規則整體假說筆記 -->
+        <div class="bg-[#090d16] border border-amber-500/30 rounded-xl p-3.5 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-lightbulb"></i> 指令命名結構整體假說（隨時記錄你對格式規律的推論）
+            </label>
+            <span class="text-[11px] text-slate-500">自動儲存</span>
+          </div>
+          <textarea id="ruleHypothesisInput" rows="2" placeholder="例如：第一段數字為事件時間序；第二段英文為紀錄性質；第三段以後的數字若遞增可能代表出場人物代號，若有重複 (如 1-1) 可能代表位置屬性..."
+            class="w-full bg-[#0f1623] border border-slate-800 focus:border-amber-500 rounded-lg p-2.5 text-xs text-slate-200 outline-none resize-y"></textarea>
+        </div>
+
+        <!-- 2. 手動新增任意代號 -->
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-[#090d16] p-3 rounded-xl border border-slate-800">
+          <input id="glossaryKeyInput" type="text" placeholder="代號 (如 QU 或 1)" 
+            class="w-full sm:w-44 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 outline-none focus:border-amber-500" />
+          <input id="glossaryValInput" type="text" placeholder="輸入你的推測意義（例如：訊問紀錄 / 某角色名稱 / 某房間）..." 
+            class="flex-1 min-w-0 bg-[#0f1623] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-500" />
+          <button id="saveGlossaryBtn" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0">
+            儲存註解
+          </button>
+        </div>
+
+        <!-- 3. 結構分類頁籤 (自動掃描所有已出現的代號) -->
+        <div class="flex items-center gap-1.5 border-b border-slate-800 pb-2 text-xs overflow-x-auto">
+          <button data-g-tab="tokens" class="g-tab-btn active px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            ③ 尾數參數 (1, 4, 6...)
+          </button>
+          <button data-g-tab="types" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            ② 文檔類型 (QU, EN, LI...)
+          </button>
+          <button data-g-tab="seqs" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            ① 序號階段 (00, 01, 02...)
+          </button>
+          <button data-g-tab="all" class="g-tab-btn px-3 py-1.5 rounded-lg font-medium whitespace-nowrap">
+            全部已設定註解
+          </button>
+        </div>
+
+        <p class="text-xs text-slate-400">
+          💡 系統已自動從你建立的所有指令中提取代號並統計出現文檔，直接在右側輸入框打字即可即時儲存全域推測！若遇到像 <code class="text-amber-300 font-mono">99-TEST-1-1</code> 有兩個相同數字，可在文檔頂部點擊該位置膠囊設定「單篇位置專屬註解」。
+        </p>
+
+        <!-- 自動產生的代號填空列表 -->
+        <div id="glossaryTableContainer" class="space-y-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈出視窗 2：單一參數「全域字典 vs 單篇位置專屬註解」快速編輯器 -->
+  <div id="tokenModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-lg p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div>
+          <h3 id="tokenModalTitle" class="font-bold text-sm text-slate-100 font-mono">編輯參數註解</h3>
+          <p id="tokenModalSubtitle" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+        <button id="closeTokenModalBtn" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="bg-[#090d16] p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+          <label class="font-bold text-sky-300 block">
+            🌐 全域字典推測（所有出現此代號的文檔皆會顯示）
+          </label>
+          <input id="tokenGlobalInput" type="text" placeholder="例如：1 = 死者或關鍵人物 A..." 
+            class="w-full bg-[#0f1623] border border-slate-700 focus:border-sky-500 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none" />
+        </div>
+
+        <div id="tokenLocalSection" class="bg-[#090d16] p-3.5 rounded-xl border border-amber-500/30 space-y-1.5">
+          <label class="font-bold text-amber-300 block">
+            📌 本篇位置專屬註解（僅針對本指令此位置的參數，解決如 99-TEST-1-1 重複數字問題）
+          </label>
+          <input id="tokenLocalInput" type="text" placeholder="例如：第 2 個 1 代表子事件編號或不同含義..." 
+            class="w-full bg-[#0f1623] border border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-xs text-slate-100 outline-none" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button id="cancelTokenModalBtn" class="px-3.5 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs">取消</button>
+        <button id="saveTokenModalBtn" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">儲存設定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈出視窗 3：全螢幕並排大視窗 (左看原文、右寫筆記) -->
+  <div id="focusModal" class="hidden fixed inset-0 bg-[#070a12]/95 backdrop-blur-md z-50 flex flex-col p-3 sm:p-5">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl flex-1 flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">全螢幕閱讀與編輯模式</span>
+          <span id="focusCmdTitle" class="font-mono font-bold text-base text-white"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="flex items-center bg-[#090d16] p-0.5 rounded-lg border border-slate-800 text-xs">
+            <button data-focus-layout="split" class="focus-layout-btn active px-2.5 py-1 rounded">左右並排對照</button>
+            <button data-focus-layout="notes" class="focus-layout-btn px-2.5 py-1 rounded">僅看推理筆記</button>
+            <button data-focus-layout="raw" class="focus-layout-btn px-2.5 py-1 rounded">僅看遊戲原文</button>
+          </div>
+          <button id="closeFocusModalBtn" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs">
+            關閉 (Esc)
+          </button>
+        </div>
+      </div>
+
+      <div id="focusBodyGrid" class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
+        <div id="focusRawPane" class="flex flex-col h-full overflow-hidden">
+          <label class="text-xs font-bold text-sky-300 mb-1.5 flex items-center gap-1.5">
+            <i class="fa-solid fa-terminal"></i> 遊戲輸出原文紀錄 (Raw Output)
+          </label>
+          <textarea id="focusRawInput" class="content-scalable flex-1 w-full bg-[#090d16] border border-slate-800 focus:border-sky-500 rounded-xl p-4 font-mono text-slate-200 outline-none resize-none leading-relaxed"></textarea>
+        </div>
+        <div id="focusNotePane" class="flex flex-col h-full overflow-hidden">
+          <label class="text-xs font-bold text-emerald-300 mb-1.5 flex items-center gap-1.5">
+            <i class="fa-solid fa-pen-nib"></i> 調查員推理筆記 (Notes)
+          </label>
+          <textarea id="focusNoteInput" class="content-scalable flex-1 w-full bg-[#090d16] border border-slate-800 focus:border-emerald-500 rounded-xl p-4 text-slate-100 outline-none resize-none leading-relaxed"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈出視窗 4：匯出與匯入備份 -->
+  <div id="ioModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0f1623] border border-slate-700 rounded-2xl w-full max-w-2xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-base text-slate-100"><i class="fa-solid fa-floppy-disk text-emerald-400 mr-2"></i>資料備份匯出與匯入 (JSON)</h3>
+        <button id="closeIoModalBtn" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="downloadJsonBtn" class="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">
+          <i class="fa-solid fa-download mr-1"></i>下載 .json 備份檔
+        </button>
+        <label class="px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer">
+          <i class="fa-solid fa-upload mr-1"></i>從電腦選取 .json 還原
+          <input id="uploadJsonInput" type="file" accept=".json" class="hidden" />
+        </label>
+        <button id="applyJsonTextBtn" class="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">
+          從下方文字框還原資料
+        </button>
+      </div>
+      <textarea id="ioTextarea" rows="10" class="w-full bg-[#090d16] border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-300 outline-none"></textarea>
+    </div>
+  </div>
+
+  <!-- 底部浮動通知 (Toast) -->
+  <div id="toastBox" class="fixed bottom-4 right-4 z-50 pointer-events-none flex flex-col gap-2"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
