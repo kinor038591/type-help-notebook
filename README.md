@@ -2,7 +2,7 @@
 
 > A web-based investigation notebook & command tracker for the puzzle game "Type Help" | 《Type Help》文字解謎輔助筆記工具（支援指令解析、代號字典與矩陣全覽）
 
-🔗 **線上使用 (GitHub Pages)**：`https://<你的GitHub帳號>.github.io/type-help-notebook/`
+🔗 **線上使用 (GitHub Pages)**：`https://kinor038591.github.io/type-help-notebook/`
 
 ---
 
@@ -33,4 +33,4 @@
 
 1. 下載或 Clone 本儲存庫：
    ```bash
-   git clone [https://github.com/](https://github.com/)<你的GitHub帳號>/type-help-notebook.git
+   git clone [https://github.com/](https://github.com/)kinor038591/type-help-notebook.git
