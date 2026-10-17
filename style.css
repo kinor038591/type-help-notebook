@@ -69,8 +69,8 @@ body[data-font-scale="xl"] {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -86,7 +86,7 @@ body[data-font-scale="xl"] {
   background: #334155;
 }
 
-/* 矩陣表格：嚴格限制欄寬，防止長筆記把單一欄位撐到幾千像素 */
+/* 矩陣表格：不可加 overflow:hidden，否則 sticky 左欄會失效 */
 .matrix-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -105,21 +105,30 @@ body[data-font-scale="xl"] {
   max-width: 175px;
 }
 
+/* 頂部標頭固定 */
 .matrix-table thead th {
   position: sticky;
   top: 0;
   background-color: #0f1623;
-  z-index: 10;
+  z-index: 20;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
-.matrix-table tbody th {
+/* 左側第一欄固定（往右滑看 #11 時永遠固定在左側） */
+.matrix-table tbody th.sticky-col {
   position: sticky;
   left: 0;
-  background-color: #0f1623;
-  z-index: 5;
+  background-color: #0d1422;
+  z-index: 15;
+  box-shadow: 3px 0 6px rgba(0, 0, 0, 0.55);
 }
 
-.matrix-table thead th:first-child {
+/* 左上角交叉格雙向固定 */
+.matrix-table thead th.sticky-corner {
+  position: sticky;
+  top: 0;
   left: 0;
-  z-index: 15;
+  z-index: 30;
+  background-color: #0f1623;
+  box-shadow: 3px 2px 6px rgba(0, 0, 0, 0.6);
 }

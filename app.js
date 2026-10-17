@@ -7,7 +7,7 @@ const STATUS_META = {
   invalid: { label: '擱置', dot: 'bg-slate-500', text: 'text-slate-400', border: 'border-slate-600/40', bg: 'bg-slate-700/20' }
 };
 
-const KNOWN_SYS_CMDS = ['help', 'inbox', 'list', 'save', 'name', 'note'];
+const KNOWN_SYS_CMDS = ['help', 'inbox', 'list', 'save', 'name', 'note', 'title'];
 
 function isDigitsOnly(str) {
   return Boolean(str) && !/[^0-9]/.test(str);
@@ -57,7 +57,6 @@ function parseCommandStructure(rawInput) {
   };
 }
 
-// 完全乾淨、無任何內建劇透的初始狀態（僅保留 help, inbox, list, save 四個基礎系統指令）
 function getInitialState() {
   return {
     commands: {},
@@ -79,7 +78,7 @@ function getInitialState() {
     ui: {
       selectedId: '',
       mainView: 'workspace',
-      matrixMode: 'seq-type',
+      matrixMode: 'doc-token',
       netMode: 'cards',
       listMode: 'compact',
       fontScale: 'md',
@@ -140,7 +139,6 @@ function loadState() {
       cmd.type = reParsed.type;
       cmd.rawTokens = reParsed.rawTokens;
       cmd.tokens = reParsed.tokens;
-      // 結構化手動提及紀錄 [{ speaker: '7', target: '客厅 (Living room)' }]，向下相容舊版字串陣列
       cmd.manualMentions = (cmd.manualMentions || []).concat(
         (cmd.mentionedCodes || []).map(mc => (typeof mc === 'string' ? { speaker: '', target: mc } : mc))
       );
@@ -185,15 +183,17 @@ function showToast(msg, type = 'info') {
   const box = document.getElementById('toastBox');
   const div = document.createElement('div');
   const colors = type === 'success'
-    ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
-    : 'bg-slate-900/95 border-slate-700 text-slate-200';
+    ? 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200'
+    : (type === 'warn'
+        ? 'bg-rose-950/95 border-rose-500/60 text-rose-200'
+        : 'bg-slate-900/95 border-slate-700 text-slate-200');
   div.className = 'px-3.5 py-2 rounded-xl border text-xs shadow-xl transition-all duration-300 ' + colors;
   div.textContent = msg;
   box.appendChild(div);
   setTimeout(() => {
     div.classList.add('opacity-0', 'translate-y-2');
     setTimeout(() => div.remove(), 300);
-  }, 2400);
+  }, 2500);
 }
 
 function escapeHtml(str = '') {
@@ -217,9 +217,7 @@ window.switchMainView = function(viewName) {
   renderAll();
 };
 
-// ==================== 智慧對話提及解析引擎 (解析「#誰 ➔ 提到什麼」) ====================
-
-// 比對某個詞彙是否已經對應到字典中的某個代號 (例如 "客厅 (Living room)" -> 對應 "LI"；"索顿 (Thornton)" -> 對應 "11")
+// ==================== 智慧對話提及解析引擎 (精準剝離動詞前綴) ====================
 function matchTermToGlossaryCode(termText) {
   if (!termText) return '';
   const cleanTerm = termText.replace(/^#/, '').trim();
@@ -246,7 +244,7 @@ function matchTermToGlossaryCode(termText) {
   return '';
 }
 
-// 從單句話中提取中英對照專有名詞（如 "其他人都在客厅（Living room）里" -> 提取 "客厅 (Living room)"）
+// 升級版：精準從句子中提取「名詞 (English)」，徹底剝除「我赶着去」「他过去常去」「大多数时间都在」等長前綴
 function extractBilingualTermsFromSentence(sentence) {
   const results = [];
   const regex = /[（\(]([A-Za-z][A-Za-z0-9\s\.\-']{1,28})[）\)]/g;
@@ -255,8 +253,10 @@ function extractBilingualTermsFromSentence(sentence) {
     const eng = m[1].trim();
     const prefix = sentence.slice(Math.max(0, m.index - 14), m.index);
     let cnSeg = prefix.split(/[，。！？；：、“”"'\s,!\?;:\[\]（）\(\)]/).pop() || '';
-    // 去除中文常見前綴介詞與動詞，精準保留名詞本體
-    cnSeg = cnSeg.replace(/^(?:其他人|所有人|我們|我们|他們|他们|她們|她们|你們|你们|這位|这位|那位|那個|那个|這個|这个|你|我|他|她|它)?(?:都在|還在|还在|也在|不在|是在|正是|都是|不是|就是|還是|还是|在|是|的|有|去|到|見|见|找|問|问|和|與|与|跟|向|對|对|給|给|把|被|讓|让|叫|喊|得知|知道|介紹|介绍|關於|关于|看到|聽見|听见|連|连)+/, '').trim();
+    // 以最後出現的介詞、動詞、助詞或數量詞進行切分，只取最末端緊貼括號的純名詞
+    const verbSplit = cnSeg.split(/(?:都在|還在|还在|也在|不在|是在|都是|不是|就是|常去|趕著去|赶着去|走進|走进|進入|进入|離開|离开|回到|來到|来到|去了|到了|來了|来了|進了|进了|問了|问了|見了|见了|看到|聽見|听见|得知|知道|介紹|介绍|關於|关于|前往|通往|一位|一名|一個|一个|這間|这间|那間|那间|[在去到是了的有和與与跟向對对給给把被讓让叫喊見见找問问連连回進进出])/);
+    cnSeg = (verbSplit.pop() || '').trim();
+
     if (cnSeg) {
       results.push(cnSeg + ' (' + eng + ')');
     } else {
@@ -266,8 +266,6 @@ function extractBilingualTermsFromSentence(sentence) {
   return results;
 }
 
-// 解析單篇文檔的所有「發言者 ➔ 提及對象」紀錄
-// 回傳陣列: [{ speaker: '7', targetText: '客厅 (Living room)', matchedCode: 'LI', isManual: false, manualIdx: -1 }]
 function getStructuredMentionsForCmd(cmd) {
   if (!cmd) return [];
   const list = [];
@@ -278,11 +276,9 @@ function getStructuredMentionsForCmd(cmd) {
     const tg = String(targetText || '').trim();
     if (!tg) return;
     const matchedCode = matchTermToGlossaryCode(tg) || (isDigitsOnly(tg.replace(/^#/, '')) ? tg.replace(/^#/, '') : '');
-    // 若無發言者，且該代號本來就是本篇指令標題結構的一部分，且不是手動加的，則不重複列為內文提及
     if (!sp && !isManual && matchedCode && (cmd.type === matchedCode || (cmd.tokens || []).includes(matchedCode))) {
       return;
     }
-    // 避免發言者自己提自己（例如行首 [1 約翰·霍布斯]）
     if (sp && matchedCode === sp) return;
 
     const dedupeKey = sp + '>>' + (matchedCode || tg.toLowerCase());
@@ -298,12 +294,10 @@ function getStructuredMentionsForCmd(cmd) {
     });
   }
 
-  // 1. 先載入使用者手動新增的提及紀錄
   (cmd.manualMentions || []).forEach((item, idx) => {
     addEntry(item.speaker, item.target, true, idx);
   });
 
-  // 2. 逐行分析遊戲原文與筆記中的對話與敘述
   const lines = ((cmd.rawOutput || '') + '\n' + (cmd.notes || '')).split('\n');
   let currentSpeaker = '';
 
@@ -313,7 +307,6 @@ function getStructuredMentionsForCmd(cmd) {
 
     let contentPart = line;
 
-    // 偵測行首是否有 [7] 或 [1 约翰·霍布斯 (John Hobbes)]
     const bracketMatch = line.match(/^\[\s*(\d{1,3})(?:\s+[^\[\]]*)?\]\s*(.*)$/);
     if (bracketMatch) {
       currentSpeaker = bracketMatch[1];
@@ -322,7 +315,6 @@ function getStructuredMentionsForCmd(cmd) {
       currentSpeaker = '';
     }
 
-    // 偵測筆記中類似 "#7提到客厅" 或 "#5詢問#6得知伊芙（Eve）" 的寫法
     const noteSpeakerMatch = line.match(/^#(\d{1,3})\s*(?:提到|說|说|詢問|询问|介紹|介绍|對|对|向|->|：|:)\s*(.*)$/);
     if (noteSpeakerMatch) {
       currentSpeaker = noteSpeakerMatch[1];
@@ -331,13 +323,11 @@ function getStructuredMentionsForCmd(cmd) {
 
     if (!contentPart) return;
 
-    // (A) 提取該行對話中的所有「中文 (English)」專有名詞（如 客厅（Living room）、索顿（Thornton）、小艾（Eddie）、小维（Vic））
     const bilingualTerms = extractBilingualTermsFromSentence(contentPart);
     bilingualTerms.forEach(term => {
       addEntry(currentSpeaker, term, false, -1);
     });
 
-    // (B) 提取該行中提到的 #數字 (如 #6)
     const hashMatches = contentPart.match(/#(\d{1,3})\b/g) || [];
     hashMatches.forEach(hm => {
       const num = hm.replace('#', '');
@@ -346,7 +336,6 @@ function getStructuredMentionsForCmd(cmd) {
       }
     });
 
-    // (C) 比對字典中已定義的名稱是否出現在該句中
     const lowerContent = contentPart.toLowerCase();
     Object.entries(state.glossary).forEach(([codeKey, meaning]) => {
       if (!meaning || codeKey.startsWith('SEQ_') || codeKey === currentSpeaker) return;
@@ -366,11 +355,10 @@ function getStructuredMentionsForCmd(cmd) {
   return list;
 }
 
-// 取得某代號在全站的反向關聯（包含：結構出現、該代號說過/提過什麼、被誰提及）
 function getBacklinksForCode(codeKey) {
   const inStructure = [];
-  const spokenByThisCode = []; // 這個代號在對話裡提過哪些詞彙/對象
-  const mentionedByOthers = []; // 哪些文檔或哪個發言者提到了這個代號
+  const spokenByThisCode = [];
+  const mentionedByOthers = [];
   const inGlossaryRels = [];
 
   Object.values(state.commands).forEach(cmd => {
@@ -415,7 +403,6 @@ function getBacklinksForCode(codeKey) {
   };
 }
 
-// 提取行首明確標示的 [編號 姓名]（如 [1 约翰·霍布斯 (John Hobbes)]）
 function extractBracketedCodesFromText(text) {
   const regex = /\[\s*(\d{1,3})\s+([^\[\]\n]{1,40}?)\s*\]/g;
   let match;
@@ -484,7 +471,9 @@ function applyUiSettings() {
   document.getElementById('filterSegBTitle').textContent = '📍 ' + segB;
   document.getElementById('filterSegCTitle').textContent = '🏷️ ' + segC + '（含對話提及）';
   document.getElementById('matrixModeBtn1').textContent = '① ' + segA + ' × ' + segB;
-  document.getElementById('matrixModeBtn2').textContent = '② 文檔 × ' + segC + '（含提及）';
+  document.getElementById('matrixModeBtn2').textContent = '② 文檔(依' + segA + '分組) × ' + segC;
+  const btn3 = document.getElementById('matrixModeBtn3');
+  if (btn3) btn3.textContent = '③ ' + segA + ' × ' + segC + ' (誰在哪裡)';
   document.getElementById('gTabBtnTokens').textContent = '③ ' + segC;
   document.getElementById('gTabBtnTypes').textContent = '② ' + segB;
   document.getElementById('gTabBtnSeqs').textContent = '① ' + segA;
@@ -722,7 +711,6 @@ function renderCommandList() {
       ].join('');
     }
 
-    // 詳細卡片模式
     const rawTokensHtml = (cmd.rawTokens || []).map((tk, idx) => {
       const localNote = cmd.localTokenNotes ? cmd.localTokenNotes[idx] : '';
       const globalNote = state.glossary[tk] ? state.glossary[tk].split('(')[0].trim() : '';
@@ -789,7 +777,6 @@ function renderWorkspace() {
 
   const cmd = state.commands[state.ui.selectedId] || Object.values(state.commands)[0];
 
-  // 當沒有任何文檔時，顯示空白待命畫面並隱藏舊內容
   if (!cmd) {
     state.ui.selectedId = '';
     emptyStateEl.classList.remove('hidden');
@@ -887,7 +874,7 @@ function renderWorkspace() {
 
   const childrenBox = document.getElementById('childrenPillsContainer');
   if (!cmd.children || cmd.children.length === 0) {
-    childrenBox.innerHTML = '<span class="text-xs text-slate-500">尚無衍生指令，可由下方輸入或點右上角「掃描內文新指令」</span>';
+    childrenBox.innerHTML = '<span class="text-xs text-slate-500">尚無衍生指令，可由下方輸入、點右上角「掃描內文新指令」或在測試板點選「✓ 有效」自動關聯</span>';
   } else {
     childrenBox.innerHTML = cmd.children.map(cid => {
       const target = state.commands[cid];
@@ -938,7 +925,7 @@ function renderWorkspace() {
     }).join('');
   }
 
-  // 區塊 B：未知指令組合測試板
+  // 區塊 B：未知指令組合測試板（支援直接標記「✓ 有效」並自動關聯至本篇衍生指令，且留在當前頁面）
   const scratchBody = document.getElementById('bodyScratchpad');
   const isWildcard = cmd.id.includes('?') || (cmd.scratchpad && cmd.scratchpad.length > 0);
   scratchBody.classList.toggle('hidden', !isWildcard);
@@ -969,17 +956,30 @@ function renderWorkspace() {
     scratchListEl.innerHTML = '<div class="text-xs text-slate-500">尚無測試紀錄</div>';
   } else {
     scratchListEl.innerHTML = cmd.scratchpad.map((item, idx) => {
-      const txtCls = item.status === 'fail'
+      const isOk = item.status === 'ok';
+      const isFail = item.status === 'fail';
+      const rowBorder = isOk ? 'border-emerald-500/50 bg-emerald-950/20' : (isFail ? 'border-rose-900/40 bg-[#090d16]' : 'border-slate-800 bg-[#090d16]');
+      const txtCls = isFail
         ? 'line-through text-slate-500'
-        : (item.status === 'ok' ? 'text-emerald-400 font-bold' : 'text-slate-200');
-      const failBtnCls = item.status === 'fail' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-rose-300';
+        : (isOk ? 'text-emerald-300 font-bold' : 'text-slate-200');
+      const failBtnCls = isFail ? 'bg-rose-600 text-white font-bold' : 'bg-slate-800 hover:bg-slate-700 text-rose-300';
+      const okBtnCls = isOk ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-300 border border-emerald-500/40';
+      const okLabel = isOk ? '✓ 已有效關聯' : '✓ 有效 (建立並關聯)';
+      const jumpBtn = (isOk && state.commands[item.text])
+        ? '<button onclick="selectCommand(\'' + escapeHtml(item.text) + '\')" class="px-2 py-0.5 rounded bg-sky-600/25 hover:bg-sky-600/40 text-sky-300 border border-sky-500/40" title="前往該文檔">前往 ➔</button>'
+        : '';
+
       return [
-        '<div class="flex items-center justify-between gap-2 bg-[#090d16] px-3 py-1.5 rounded-lg border border-slate-800 text-xs">',
-          '<span class="font-mono ' + txtCls + '">' + escapeHtml(item.text) + '</span>',
+        '<div class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg border text-xs transition ' + rowBorder + '">',
+          '<div class="flex items-center gap-2 min-w-0">',
+            (isOk ? '<span class="text-emerald-400 font-bold">✓</span>' : (isFail ? '<span class="text-rose-400 font-bold">✕</span>' : '<span class="text-slate-600">●</span>')),
+            '<span class="font-mono ' + txtCls + ' truncate">' + escapeHtml(item.text) + '</span>',
+          '</div>',
           '<div class="flex items-center gap-1 shrink-0">',
-            '<button onclick="copyText(\'' + escapeHtml(item.text) + '\')" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">複製</button>',
-            '<button onclick="setScratchStatus(' + idx + ', \'fail\')" class="px-2 py-0.5 rounded ' + failBtnCls + '">無效</button>',
-            '<button onclick="promoteScratchToCommand(' + idx + ')" class="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 border border-emerald-500/30">有效並轉正式文檔</button>',
+            '<button onclick="copyText(\'' + escapeHtml(item.text) + '\')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">複製</button>',
+            '<button onclick="setScratchStatus(' + idx + ', \'fail\')" class="px-2 py-0.5 rounded transition ' + failBtnCls + '">✕ 無效</button>',
+            '<button onclick="markScratchValidAndLink(' + idx + ')" class="px-2.5 py-0.5 rounded transition ' + okBtnCls + '">' + okLabel + '</button>',
+            jumpBtn,
             '<button onclick="deleteScratchItem(' + idx + ')" class="px-1.5 py-0.5 text-slate-500 hover:text-rose-400">×</button>',
           '</div>',
         '</div>'
@@ -1006,7 +1006,6 @@ window.removeManualMention = function(idx) {
   renderAll();
 };
 
-// 開啟「📌 歸入字典」彈出視窗：讓玩家將對話中提到的 "小艾 (Eddie)" 或 "客厅 (Living room)" 綁定給特定代號
 window.openAssignTermModal = function(termText) {
   const cmd = state.commands[state.ui.selectedId];
   document.getElementById('assignTermValueInput').value = termText;
@@ -1073,7 +1072,7 @@ function renderSearchHighlightBanner(cmd) {
   banner.innerHTML = '<div class="text-amber-300 font-bold mb-1">🔍 搜尋關鍵字「' + escapeHtml(q) + '」高亮預覽：</div><div class="font-mono whitespace-pre-wrap text-slate-200 max-h-40 overflow-y-auto">' + highlighted + '</div>';
 }
 
-// ==================== 右側視圖 2：獨立收件匣 (新增寄件者與自動擷取「发自/主题」) ====================
+// ==================== 右側視圖 2：獨立收件匣 ====================
 function renderInboxView() {
   const box = document.getElementById('inboxFullContainer');
   const msgs = state.inboxMessages || [];
@@ -1148,7 +1147,6 @@ function renderInboxView() {
   }).join('');
 }
 
-// 當貼上信件內容時，自動偵測「发自: XXX」與「主题: YYY」
 window.handleInboxContentInput = function(msgId, val) {
   const msg = (state.inboxMessages || []).find(m => m.id === msgId);
   if (!msg) return;
@@ -1239,7 +1237,7 @@ window.deleteInboxMsg = function(msgId) {
   renderAll();
 };
 
-// ==================== 右側視圖 3：矩陣全覽 ====================
+// ==================== 右側視圖 3：矩陣全覽 (三種視角 + 左欄固定 + 時段分組) ====================
 function renderMatrixView() {
   const container = document.getElementById('matrixFullContainer');
   const docs = Object.values(state.commands).filter(c => c.category !== 'system' && c.type !== 'INFO');
@@ -1252,6 +1250,7 @@ function renderMatrixView() {
     return;
   }
 
+  // 模式 ①：序號(時段) × 分類代號(場所)
   if (state.ui.matrixMode === 'seq-type') {
     const seqs = Array.from(new Set(docs.map(d => d.seq).filter(Boolean))).sort((a, b) => Number(a) - Number(b));
     const types = Array.from(new Set(docs.map(d => d.type).filter(Boolean))).sort();
@@ -1288,27 +1287,114 @@ function renderMatrixView() {
         return '<td class="p-1.5 align-top space-y-1.5 matrix-cell-fixed">' + itemsHtml + '</td>';
       }).join('');
 
-      return '<tr class="hover:bg-slate-900/40"><th class="p-2.5 font-mono font-bold text-xs text-slate-200 w-28 min-w-[110px] whitespace-nowrap"><div>#' + escapeHtml(seq) + '</div><div class="text-[10px] text-slate-400 font-normal truncate max-w-[96px]">' + escapeHtml(seqNote) + '</div></th>' + cells + '</tr>';
+      return '<tr class="hover:bg-slate-900/40"><th class="sticky-col p-2.5 font-mono font-bold text-xs text-slate-200 w-32 min-w-[120px] whitespace-nowrap"><div>🕒 #' + escapeHtml(seq) + '</div><div class="text-[10px] text-slate-400 font-normal truncate max-w-[105px]">' + escapeHtml(seqNote) + '</div></th>' + cells + '</tr>';
     }).join('');
 
-    container.innerHTML = '<table class="matrix-table text-left border-t border-l border-slate-800 rounded-xl overflow-hidden text-xs"><thead><tr><th class="p-2.5 font-mono text-slate-400 w-28 min-w-[110px] whitespace-nowrap">' + escapeHtml(segALabel) + ' \\ ' + escapeHtml(segBLabel) + '</th>' + headCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
+    container.innerHTML = '<table class="matrix-table text-left border-t border-l border-slate-800 text-xs"><thead><tr><th class="sticky-corner p-2.5 font-mono text-slate-400 w-32 min-w-[120px] whitespace-nowrap">' + escapeHtml(segALabel) + ' \\ ' + escapeHtml(segBLabel) + '</th>' + headCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table>';
     return;
   }
 
-  // 子模式 ②：文檔 × 尾數代號（同時標示「● 結構包含」與「#誰➔提及」）
+  // 模式 ③：時段(序號) × 尾數代號(人物) —— 一眼看穿每個時段誰在哪個場所！
+  if (state.ui.matrixMode === 'seq-token') {
+    const seqs = Array.from(new Set(docs.map(d => d.seq).filter(Boolean))).sort((a, b) => Number(a) - Number(b));
+    const allTokens = getAllDiscoveredTokens();
+
+    const tokenHeaders = allTokens.map(tk => {
+      const gNote = state.glossary[tk] || '';
+      const shortName = gNote ? gNote.split('(')[0].trim() : '';
+      return '<th class="p-2 text-center font-mono text-sky-300 w-24 min-w-[92px] max-w-[105px]" title="' + escapeHtml(gNote) + '"><div class="font-bold">#' + escapeHtml(tk) + '</div><div class="text-[10px] text-slate-300 font-normal truncate">' + escapeHtml(shortName) + '</div></th>';
+    }).join('');
+
+    const seqRows = seqs.map(seq => {
+      const seqDocs = docs.filter(d => d.seq === seq);
+      const seqNote = state.glossary['SEQ_' + seq] || '';
+
+      const cells = allTokens.map(tk => {
+        const presentDocs = seqDocs.filter(d => (d.rawTokens || []).includes(tk));
+        if (presentDocs.length > 0) {
+          const badges = presentDocs.map(pd => {
+            const locShort = state.glossary[pd.type] ? state.glossary[pd.type].split('(')[0].trim() : '';
+            const st = STATUS_META[pd.status] || STATUS_META.todo;
+            return '<button onclick="selectCommand(\'' + escapeHtml(pd.id) + '\')" title="點擊開啟 ' + escapeHtml(pd.id) + '" class="w-full px-1.5 py-1 rounded border ' + st.border + ' ' + st.bg + ' ' + st.text + ' font-mono font-bold text-[11px] hover:brightness-125 truncate block">' + escapeHtml(pd.type) + (locShort ? ('·' + escapeHtml(locShort)) : '') + '</button>';
+          }).join('');
+          return '<td class="p-1.5 text-center align-middle space-y-1 bg-emerald-950/15">' + badges + '</td>';
+        }
+
+        // 檢查該時段是否有文檔提及此代號
+        let mentionInfo = null;
+        for (let i = 0; i < seqDocs.length; i++) {
+          const ms = getStructuredMentionsForCmd(seqDocs[i]);
+          const hit = ms.find(m => m.matchedCode === tk);
+          if (hit) {
+            mentionInfo = { doc: seqDocs[i], hit: hit };
+            break;
+          }
+        }
+        if (mentionInfo) {
+          const sp = mentionInfo.hit.speaker ? ('#' + mentionInfo.hit.speaker) : '內文';
+          return '<td class="p-1.5 text-center align-middle"><button onclick="selectCommand(\'' + escapeHtml(mentionInfo.doc.id) + '\')" title="於 ' + escapeHtml(mentionInfo.doc.id) + ' 被 ' + escapeHtml(sp) + ' 提及" class="w-full px-1 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono text-[10px] hover:brightness-125 truncate">' + escapeHtml(mentionInfo.doc.type + ':' + sp + '提') + '</button></td>';
+        }
+
+        return '<td class="p-1.5 text-center font-mono text-slate-700">·</td>';
+      }).join('');
+
+      return '<tr class="hover:bg-slate-900/50"><th class="sticky-col p-2.5 font-mono text-left w-36 min-w-[140px] whitespace-nowrap"><div class="text-emerald-300 font-bold">🕒 時段 #' + escapeHtml(seq) + ' <span class="text-[10px] text-slate-400 font-normal">(' + seqDocs.length + '篇)</span></div><div class="text-[10px] text-slate-400 font-normal truncate max-w-[125px]">' + escapeHtml(seqNote) + '</div></th>' + cells + '</tr>';
+    }).join('');
+
+    container.innerHTML = [
+      '<div class="mb-3 text-xs text-slate-300 bg-[#0f1623] p-3 rounded-xl border border-slate-800 flex flex-wrap items-center gap-4">',
+        '<span>💡 <strong>時段行蹤總表</strong>：直接顯示每個時段（序號）各代號所在的分類位置（如 <code class="text-emerald-300 font-mono">KI·厨房</code>、<code class="text-emerald-300 font-mono">ST·书房</code>），點擊任意格子可直接開啟該文檔！</span>',
+      '</div>',
+      '<table class="matrix-table text-left border-t border-l border-slate-800 text-xs">',
+        '<thead><tr><th class="sticky-corner p-2.5 font-mono text-slate-300 w-36 min-w-[140px] whitespace-nowrap">' + escapeHtml(segALabel) + ' \\ ' + escapeHtml(segCLabel) + '</th>' + tokenHeaders + '</tr></thead>',
+        '<tbody>' + seqRows + '</tbody>',
+      '</table>'
+    ].join('');
+    return;
+  }
+
+  // 模式 ②：文檔(依時段分組) × 尾數代號（左欄使用原生 th.sticky-col 確保往右滑時固定不動，並依序號時段強化分組）
   const allTokens = getAllDiscoveredTokens();
   const sortedDocs = [...docs].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+
+  // 統計每個序號有幾篇文檔
+  const seqCounts = {};
+  sortedDocs.forEach(d => {
+    const s = d.seq || '其他';
+    seqCounts[s] = (seqCounts[s] || 0) + 1;
+  });
 
   const tokenHeaders = allTokens.map(tk => {
     const gNote = state.glossary[tk] || '';
     const shortName = gNote ? gNote.split('(')[0].trim() : '';
-    return '<th class="p-2 text-center font-mono text-sky-300 w-20 min-w-[76px] max-w-[84px]" title="' + escapeHtml(gNote) + '"><div class="font-bold">#' + escapeHtml(tk) + '</div><div class="text-[10px] text-slate-300 font-normal truncate">' + escapeHtml(shortName) + '</div></th>';
+    return '<th class="p-2 text-center font-mono text-sky-300 w-20 min-w-[78px] max-w-[86px]" title="' + escapeHtml(gNote) + '"><div class="font-bold">#' + escapeHtml(tk) + '</div><div class="text-[10px] text-slate-300 font-normal truncate">' + escapeHtml(shortName) + '</div></th>';
   }).join('');
 
-  const docRows = sortedDocs.map(d => {
+  let lastSeq = null;
+  let seqGroupIndex = 0;
+  const docRows = [];
+
+  sortedDocs.forEach(d => {
+    const curSeq = d.seq || '其他';
+    const isNewSeq = curSeq !== lastSeq;
+    if (isNewSeq) {
+      lastSeq = curSeq;
+      seqGroupIndex++;
+      // 當同一個序號（時段）有多篇文檔，或切換時段時，插入醒目的時段分組列
+      const seqMeaning = state.glossary['SEQ_' + curSeq] ? (' — ' + state.glossary['SEQ_' + curSeq]) : '';
+      const countBadge = seqCounts[curSeq] > 1
+        ? '<span class="ml-2 px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px]">同時段共 ' + seqCounts[curSeq] + ' 篇文檔</span>'
+        : '';
+      docRows.push(
+        '<tr class="bg-[#111c30]"><th class="sticky-col px-3 py-1.5 font-mono text-[11px] text-emerald-300 font-bold border-t-2 border-t-emerald-500/40 whitespace-nowrap">🕒 ' + escapeHtml(segALabel) + ' #' + escapeHtml(curSeq) + escapeHtml(seqMeaning) + countBadge + '</th>' +
+        '<td colspan="' + Math.max(1, allTokens.length) + '" class="border-t-2 border-t-emerald-500/40 bg-[#111c30]/70"></td></tr>'
+      );
+    }
+
     const st = STATUS_META[d.status] || STATUS_META.todo;
-    const locName = state.glossary[d.type] ? (' [' + state.glossary[d.type].split('(')[0].trim() + ']') : '';
+    const locName = state.glossary[d.type] ? ('[' + state.glossary[d.type].split('(')[0].trim() + ']') : '';
     const mentions = getStructuredMentionsForCmd(d);
+    const rowBg = (seqGroupIndex % 2 === 0) ? 'bg-[#0b111e]' : 'bg-[#090d16]';
 
     const cells = allTokens.map(tk => {
       const structCount = (d.rawTokens || []).filter(x => x === tk).length;
@@ -1323,18 +1409,31 @@ function renderMatrixView() {
       return '<td class="p-2 text-center font-mono text-slate-700">·</td>';
     }).join('');
 
-    return '<tr class="hover:bg-slate-900/50"><th onclick="selectCommand(\'' + escapeHtml(d.id) + '\')" class="p-2.5 font-mono cursor-pointer hover:underline flex items-center gap-1.5 w-52 min-w-[200px] whitespace-nowrap"><span class="w-2 h-2 rounded-full shrink-0 ' + st.dot + '"></span><span class="text-white font-bold">' + escapeHtml(d.id) + '</span><span class="text-amber-300/80 text-[11px] font-normal truncate">' + escapeHtml(locName) + '</span></th>' + cells + '</tr>';
-  }).join('');
+    // 注意：不能在 <th> 直接加 flex，必須包在內部 <div>，否則 position: sticky 會失效！
+    docRows.push(
+      '<tr class="' + rowBg + ' hover:bg-slate-800/60">' +
+        '<th onclick="selectCommand(\'' + escapeHtml(d.id) + '\')" class="sticky-col p-2.5 font-mono cursor-pointer hover:underline w-60 min-w-[235px] max-w-[250px] whitespace-nowrap" title="' + escapeHtml(d.id + ' ' + locName) + '">' +
+          '<div class="flex items-center gap-1.5 overflow-hidden">' +
+            '<span class="w-2 h-2 rounded-full shrink-0 ' + st.dot + '"></span>' +
+            '<span class="text-white font-bold shrink-0">' + escapeHtml(d.id) + '</span>' +
+            '<span class="text-amber-300/85 text-[11px] font-normal truncate">' + escapeHtml(locName) + '</span>' +
+          '</div>' +
+        '</th>' +
+        cells +
+      '</tr>'
+    );
+  });
 
   container.innerHTML = [
     '<div class="mb-3 text-xs text-slate-300 bg-[#0f1623] p-3 rounded-xl border border-slate-800 flex flex-wrap items-center gap-4">',
       '<span>💡 <strong>交叉比對圖例</strong>：</span>',
       '<span class="text-emerald-300 font-mono">● 出現在指令結構中</span>',
-      '<span class="text-purple-300 font-mono">#7提及 = 該代號在對話中被 #7 提及</span>',
+      '<span class="text-purple-300 font-mono">#11提及 = 該代號在對話中被 #11 提及</span>',
+      '<span class="text-slate-400">（往右滑動查看 #11 時，左側文檔欄會保持固定）</span>',
     '</div>',
-    '<table class="matrix-table text-left border-t border-l border-slate-800 rounded-xl overflow-hidden text-xs">',
-      '<thead><tr><th class="p-2.5 font-mono text-slate-300 w-52 min-w-[200px] whitespace-nowrap">文檔指令 \\ ' + escapeHtml(segCLabel) + '</th>' + tokenHeaders + '</tr></thead>',
-      '<tbody>' + docRows + '</tbody>',
+    '<table class="matrix-table text-left border-t border-l border-slate-800 text-xs">',
+      '<thead><tr><th class="sticky-corner p-2.5 font-mono text-slate-300 w-60 min-w-[235px] whitespace-nowrap">文檔指令 \\ ' + escapeHtml(segCLabel) + '</th>' + tokenHeaders + '</tr></thead>',
+      '<tbody>' + docRows.join('') + '</tbody>',
     '</table>'
   ].join('');
 }
@@ -1640,7 +1739,7 @@ window.deleteSysCmd = function(idx) {
   renderTopStatsAndBadges();
 };
 
-// ==================== 文檔新增、修改、關聯操作 ====================
+// ==================== 文檔新增、修改、關聯與測試板操作 ====================
 function addCommand(rawId, source = '', status = 'todo') {
   const parsed = parseCommandStructure(rawId);
   if (!parsed.id) return null;
@@ -1656,13 +1755,20 @@ function addCommand(rawId, source = '', status = 'todo') {
     return null;
   }
 
+  const cleanSource = source === parsed.id ? '' : source;
   const existing = state.commands[parsed.id];
   if (existing) {
-    if (source && source !== parsed.id && !existing.source) existing.source = source;
+    if (cleanSource && !existing.source) {
+      existing.source = cleanSource;
+    }
+    if (cleanSource && state.commands[cleanSource]) {
+      const parent = state.commands[cleanSource];
+      parent.children = parent.children || [];
+      if (!parent.children.includes(parsed.id)) parent.children.push(parsed.id);
+    }
     return existing.id;
   }
 
-  const cleanSource = source === parsed.id ? '' : source;
   state.commands[parsed.id] = {
     ...parsed,
     status: status,
@@ -1678,6 +1784,7 @@ function addCommand(rawId, source = '', status = 'todo') {
 
   if (cleanSource && state.commands[cleanSource]) {
     const parent = state.commands[cleanSource];
+    parent.children = parent.children || [];
     if (!parent.children.includes(parsed.id)) parent.children.push(parsed.id);
   }
   return parsed.id;
@@ -1742,12 +1849,42 @@ window.removeChildRelation = function(childId) {
   renderAll();
 };
 
+// 測試板點擊「✕ 無效」：切換紅底狀態並彈出提示
 window.setScratchStatus = function(idx, st) {
   const cmd = state.commands[state.ui.selectedId];
   if (!cmd || !cmd.scratchpad || !cmd.scratchpad[idx]) return;
-  cmd.scratchpad[idx].status = cmd.scratchpad[idx].status === st ? 'untested' : st;
+  const item = cmd.scratchpad[idx];
+  item.status = item.status === st ? 'untested' : st;
   saveState();
   renderWorkspace();
+  if (item.status === 'fail') {
+    showToast('✕ 已標記「' + item.text + '」為無效組合', 'warn');
+  } else {
+    showToast('已恢復「' + item.text + '」為未測試狀態');
+  }
+};
+
+// 測試板點擊「✓ 有效 (建立並關聯)」：標記為綠底有效、直接綁定為當前文檔的「衍生發現指令」，並停留在當前頁面方便繼續測試！
+window.markScratchValidAndLink = function(idx) {
+  const cmd = state.commands[state.ui.selectedId];
+  const item = (cmd && cmd.scratchpad) ? cmd.scratchpad[idx] : null;
+  if (!item) return;
+
+  item.status = 'ok';
+  // 直接以當前文檔 cmd.id 為來源建立或更新目標文檔，確保雙向關聯！
+  const newId = addCommand(item.text, cmd.id, 'todo');
+  if (newId && newId !== cmd.id) {
+    cmd.children = cmd.children || [];
+    if (!cmd.children.includes(newId)) {
+      cmd.children.push(newId);
+    }
+    if (state.commands[newId] && !state.commands[newId].source) {
+      state.commands[newId].source = cmd.id;
+    }
+  }
+  saveState();
+  renderAll();
+  showToast('✓ 測試有效！已建立「' + (newId || item.text) + '」並直接關聯至本篇衍生指令', 'success');
 };
 
 window.deleteScratchItem = function(idx) {
@@ -1756,17 +1893,6 @@ window.deleteScratchItem = function(idx) {
   cmd.scratchpad.splice(idx, 1);
   saveState();
   renderWorkspace();
-};
-
-window.promoteScratchToCommand = function(idx) {
-  const cmd = state.commands[state.ui.selectedId];
-  const item = (cmd && cmd.scratchpad) ? cmd.scratchpad[idx] : null;
-  if (!item) return;
-  const newId = addCommand(item.text, cmd.source || cmd.id, 'solved');
-  if (newId) {
-    selectCommand(newId);
-    showToast('已建立正式文檔：' + newId, 'success');
-  }
 };
 
 window.toggleAllCards = function(expand) {
@@ -1966,7 +2092,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') handleAddChild();
   });
 
-  // 手動新增「誰 ➔ 提到什麼」
   const handleAddMentionCode = () => {
     const cmd = state.commands[state.ui.selectedId];
     const spInput = document.getElementById('addMentionSpeakerInput');
@@ -1987,7 +2112,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') handleAddMentionCode();
   });
 
-  // 「📌 歸入字典」彈出視窗事件
   document.getElementById('closeAssignTermBtn').addEventListener('click', () => {
     document.getElementById('assignTermModal').classList.add('hidden');
   });
@@ -1998,7 +2122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const termVal = document.getElementById('assignTermValueInput').value.trim();
     const codeKey = document.getElementById('assignTermCodeInput').value.trim().replace(/^#/, '').toUpperCase();
     if (!termVal || !codeKey) {
-      showToast('請輸入要綁定的代號（如 6 或 LI）');
+      showToast('請輸入要綁定的代號（如 6 或 KI）');
       return;
     }
     state.glossary[codeKey] = termVal;
@@ -2008,7 +2132,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('已將「' + termVal + '」歸入字典代號 ' + codeKey + '！', 'success');
   });
 
-  // 新增收件匣消息
   document.getElementById('addInboxMsgBtn').addEventListener('click', () => {
     state.inboxMessages = state.inboxMessages || [];
     const nextNum = state.inboxMessages.length + 1;
@@ -2025,7 +2148,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAll();
   });
 
-  // 系統指令面板事件
   document.getElementById('openSysCmdBtn').addEventListener('click', () => {
     renderSysCmdModal();
     document.getElementById('sysCmdModal').classList.remove('hidden');
@@ -2046,7 +2168,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTopStatsAndBadges();
   });
 
-  // 提取行首 [代號 名稱]
   document.getElementById('extractNamesBtn').addEventListener('click', () => {
     const cmd = state.commands[state.ui.selectedId];
     if (!cmd) return;
@@ -2187,7 +2308,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 字典與自訂結構名稱事件
   document.getElementById('openGlossaryBtn').addEventListener('click', () => {
     renderGlossaryModal();
     document.getElementById('glossaryModal').classList.remove('hidden');
